@@ -1,0 +1,109 @@
+{
+  "theme": "dark",
+  "GENERAL UI UX DESIGN GUIDELINES": [
+    "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition. Eg: transition: all. Always add transitions for specific interactive elements like button, input excluding transforms.",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "All interactive and key informational elements MUST include a 'data-testid' attribute to facilitate robust automated testing.",
+    "DO NOT use complete transparent background in header, overlays, any surface that has content under it."
+  ],
+  "typography": {
+    "headings": {
+      "font_family": "'Outfit', sans-serif",
+      "usage": "Used for Item Names, Scenario Titles, Shop Headers. Brings an elegant, geometric, futuristic aesthetic.",
+      "styles": "Tight tracking (tracking-tight), never default bold. Use font-black for top level, font-light for sub-headers."
+    },
+    "body": {
+      "font_family": "'JetBrains Mono', monospace",
+      "usage": "Crucial for 'The System' aesthetic. Use for all stats, numbers, coin balances, logs, and system notifications.",
+      "styles": "Standard tracking. Capitalize for labels."
+    }
+  },
+  "colors": {
+    "background": "#050A15",
+    "surface": {
+      "base": "rgba(10, 25, 47, 0.4)",
+      "glass": "rgba(14, 165, 233, 0.05)",
+      "border": "rgba(56, 189, 248, 0.2)"
+    },
+    "primary": {
+      "brand": "#0EA5E9",
+      "glow": "#38BDF8",
+      "system_text": "#bae6fd"
+    },
+    "rank_colors": {
+      "F": "#64748b",
+      "E": "#94a3b8",
+      "D": "#cbd5e1",
+      "C": "#4ade80",
+      "B": "#2dd4bf",
+      "A": "#c084fc",
+      "S": "#facc15",
+      "SS": "#fb923c",
+      "SSS": "#ef4444",
+      "Star_Relic": "linear-gradient(135deg, #a855f7 0%, #06b6d4 100%)"
+    }
+  },
+  "visual_enhancers": {
+    "crystal_glassmorphism": "System windows MUST use backdrop-blur-xl bg-sky-900/10 border border-sky-400/20. Apply a subtle inset shadow to mimic 3D volume.",
+    "system_glow": "Active items and high-tier (S+) items should utilize a box-shadow glow (e.g., box-shadow: 0 0 20px 5px rgba(56,189,248,0.2)).",
+    "scanlines": "Optional: overlay a repeating-linear-gradient with 1px black lines at 5% opacity to the main background to anchor the LitRPG simulation feel.",
+    "never_transparent": "NEVER use a fully transparent background for any floating element or overlay. Minimum bg-sky-950/80 required for modals."
+  },
+  "layouts": {
+    "player_shop": "Bento Grid Mode A (Tetris Grid). DO NOT make uniform squares. F-rank items are 1x1, while Star Relics span 2x2. Use gap-6 or gap-8.",
+    "admin_dashboard": "High Density Grid Mode B. Tight layout, pure functionality. Data tables for items and users should have clear 1px borders and monospaced data.",
+    "scenarios": "Vertical asymmetrical layout. The active scenario is large and dominant (col-span-full), side quests/bounties are tightly packed to the side."
+  },
+  "components_instructions": {
+    "shop_card": "A raw div with Tailwind. The image takes the top half with max-h-[250px] object-cover. An absolute positioned 'Rank Badge' overlapping the image edge. Deep padding (p-6) for content.",
+    "transaction_log": "Monospaced layout. Looks like a server log or system console. Green/Red text for positive/negative transactions.",
+    "modals": "Purchase confirmation MUST use a heavily customized Shadcn Dialog with no white backgrounds, using the crystal glassmorphism style instead."
+  },
+  "motion": {
+    "hover": "Hovering interactive cards adds a crisp -translate-y-1, brightens the border from sky-400/20 to sky-400/60, and increases backdrop blur.",
+    "loading": "Entrance animations should mimic a 'System Initializing' cascade—staggered fade-up and scale-in."
+  },
+  "accessibility": {
+    "contrast": "Text over the deep blue background must be at least sky-100 or white. Use text-shadows when text overlaps images.",
+    "focus": "Elements must show focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#050A15]."
+  },
+  "image_urls": {
+    "star_relic_placeholder": {
+      "url": "https://images.unsplash.com/photo-1727047022121-8ab1768f2e38",
+      "category": "Shop Items - High Tier",
+      "description": "Blue and green dragon sword with white flowers. Use as a default or hero image for high-tier Star Relic items."
+    },
+    "coin_hero": {
+      "url": "https://images.unsplash.com/photo-1768429670472-c37090eb7e37",
+      "category": "UI Assets - Coins",
+      "description": "Pile of ancient gold coins. Use as an ambient background for the DM's 'Grant Coins' section or Player Balance card."
+    },
+    "skill_placeholder": {
+      "url": "https://images.unsplash.com/photo-1764438234563-0225f6c3bd72",
+      "category": "Shop Items - Skills",
+      "description": "Abstract glowing green shape. Ideal as a visual representation for Skills and Modifiers in the shop."
+    },
+    "dokkaebi_avatar": {
+      "url": "https://images.unsplash.com/photo-1633484500658-ec497dd2c315",
+      "category": "Avatars - DM/Admin",
+      "description": "Green mask with horns. Fits the trickster/Dokkaebi aesthetic. Use for the Admin profile or system narrator avatar."
+    }
+  },
+  "instructions_to_main_agent": [
+    "The application is a fullstack app with .js files (NO TypeScript .tsx files).",
+    "Use Phosphor Icons (yarn add @phosphor-icons/react) for sharp, high-tech, geometric iconography.",
+    "Implement Shadcn/UI for structured Admin tasks but heavily style them away from the default Vercel look to match the Sky Blue ORV theme.",
+    "For the Player shop view, rely on raw Tailwind divs and grid manipulation. Avoid Shadcn Cards here to allow for freeform LitRPG styling.",
+    "Coin transactions, inventory lists, and scenarios must be prominently displayed. The player should feel immersed in a gamified 'System' UI."
+  ]
+}

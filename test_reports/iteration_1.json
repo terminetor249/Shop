@@ -1,0 +1,40 @@
+{
+  "summary": "First-finish smoke of Dokkaebi Shop. Verified backend auth/items/scenarios/grant/purchase/inventory/transactions and end-to-end frontend flow: admin login -> create item -> logout -> player login -> purchase -> inventory/log/scenarios pages. All critical flows working with sky-blue ORV theme.",
+  "tested_scope": ["backend", "frontend", "auth", "integration"],
+  "passed": [
+    "POST /api/auth/login (admin) returns JWT + user (role=admin)",
+    "POST /api/auth/register creates player and returns token",
+    "GET /api/auth/me returns current user with role/coins",
+    "GET /api/items returns seeded item(s) (200)",
+    "POST /api/items (admin) creates item with rank/category/price/stock",
+    "POST /api/grant-coins updates player balance (0 -> 500) and writes tx",
+    "POST /api/purchase deducts coins (500 -> 400) and creates inventory row + tx",
+    "POST /api/purchase returns 400 'Not enough coins' when balance insufficient",
+    "GET /api/inventory returns purchased item snapshot for player",
+    "POST /api/scenarios (with scenario_type) creates main scenario visible_to=[] (all)",
+    "GET /api/scenarios as player returns broadcast scenarios",
+    "GET /api/transactions returns player's tx history",
+    "UI: admin login -> admin nav (Items/Players/Scenarios) visible",
+    "UI: admin item form creates item and it appears in shop grid",
+    "UI: logout redirects to /login",
+    "UI: player login -> header-coin-balance shows correct balance (400)",
+    "UI: admin nav hidden for player role",
+    "UI: buy-btn click deducts coins (400 -> 350) and creates tx row",
+    "UI: /inventory, /scenarios (Main Quest 1 visible), /log (3 tx rows) all load"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true,
+  "notes": [
+    "Scenario API field is 'scenario_type' (not 'type') - frontend uses correct field name.",
+    "Image upload endpoint /api/upload not exercised in this smoke - defer to full testing.",
+    "Edit/delete flows for items and scenarios not clicked through UI but backend routes exist; defer to full testing.",
+    "Filter by category/rank not clicked through UI in this smoke."
+  ],
+  "test_credentials": {
+    "admin": "admin@dokkaebi.shop / admin123 (seeded, works)",
+    "player": "player1@dokkaebi.shop / player123 (registered during this run, works)"
+  }
+}

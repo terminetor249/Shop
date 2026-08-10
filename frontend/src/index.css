@@ -1,0 +1,181 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+
+:root {
+    --bg-void: #050A15;
+    --sky-brand: #0EA5E9;
+    --sky-glow: #38BDF8;
+    --sky-text: #bae6fd;
+}
+
+body {
+    margin: 0;
+    background-color: var(--bg-void);
+    color: #e0f2fe;
+    font-family: 'JetBrains Mono', monospace;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    background-image:
+        radial-gradient(ellipse at top left, rgba(14, 165, 233, 0.12), transparent 50%),
+        radial-gradient(ellipse at bottom right, rgba(56, 189, 248, 0.08), transparent 50%);
+    background-attachment: fixed;
+}
+
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+        0deg,
+        rgba(56, 189, 248, 0.02) 0px,
+        rgba(56, 189, 248, 0.02) 1px,
+        transparent 1px,
+        transparent 3px
+    );
+    z-index: 1;
+}
+
+#root {
+    position: relative;
+    z-index: 2;
+}
+
+.font-display {
+    font-family: 'Outfit', sans-serif;
+    letter-spacing: -0.02em;
+}
+
+.font-mono {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Custom selection */
+::selection {
+    background: rgba(56, 189, 248, 0.35);
+    color: #f0f9ff;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-track {
+    background: rgba(10, 25, 47, 0.5);
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(56, 189, 248, 0.35);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(56, 189, 248, 0.6);
+}
+
+/* Crystal glass panel */
+.glass-panel {
+    background: rgba(10, 25, 47, 0.55);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    box-shadow:
+        inset 0 1px 0 rgba(186, 230, 253, 0.08),
+        0 8px 32px rgba(2, 6, 23, 0.6);
+}
+
+.glass-panel-hover {
+    transition-property: transform, border-color, background-color, box-shadow;
+    transition-duration: 220ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+.glass-panel-hover:hover {
+    transform: translateY(-4px);
+    border-color: rgba(56, 189, 248, 0.6);
+    background: rgba(14, 165, 233, 0.08);
+    box-shadow:
+        inset 0 1px 0 rgba(186, 230, 253, 0.15),
+        0 12px 40px rgba(14, 165, 233, 0.25),
+        0 0 0 1px rgba(56, 189, 248, 0.15);
+}
+
+/* System glow for high-tier items */
+.glow-s {
+    box-shadow: 0 0 20px 3px rgba(250, 204, 21, 0.25);
+}
+.glow-ss {
+    box-shadow: 0 0 24px 4px rgba(251, 146, 60, 0.28);
+}
+.glow-sss {
+    box-shadow: 0 0 28px 5px rgba(239, 68, 68, 0.32);
+}
+.glow-relic {
+    box-shadow: 0 0 32px 6px rgba(168, 85, 247, 0.4), 0 0 60px 12px rgba(6, 182, 212, 0.25);
+}
+
+/* Entrance animation */
+@keyframes system-boot {
+    0% {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
+        filter: blur(4px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+}
+.animate-boot {
+    animation: system-boot 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Pulse for coin balances */
+@keyframes coin-pulse {
+    0%, 100% { text-shadow: 0 0 8px rgba(56, 189, 248, 0.4); }
+    50% { text-shadow: 0 0 18px rgba(56, 189, 248, 0.8); }
+}
+.coin-pulse {
+    animation: coin-pulse 2.4s ease-in-out infinite;
+}
+
+/* Rank badge base */
+.rank-badge {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+@layer base {
+    :root {
+        --background: 213 90% 6%;
+        --foreground: 204 100% 92%;
+        --card: 213 60% 10%;
+        --card-foreground: 204 100% 92%;
+        --popover: 213 70% 8%;
+        --popover-foreground: 204 100% 92%;
+        --primary: 199 89% 48%;
+        --primary-foreground: 213 90% 6%;
+        --secondary: 213 40% 14%;
+        --secondary-foreground: 204 100% 92%;
+        --muted: 213 40% 14%;
+        --muted-foreground: 204 30% 70%;
+        --accent: 199 89% 48%;
+        --accent-foreground: 213 90% 6%;
+        --destructive: 0 72% 51%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 199 60% 30%;
+        --input: 213 40% 16%;
+        --ring: 199 89% 48%;
+        --radius: 0.5rem;
+    }
+}
+
+@layer base {
+    * { @apply border-border; }
+    body { @apply text-foreground; }
+}
