@@ -507,14 +507,18 @@ async def list_notifications(user: dict = Depends(get_current_user)):
     return docs
 
 
+class MarkSeenInput(BaseModel):
+    ids: List[str] = []
+
+
 @api_router.post("/notifications/mark-seen")
-async def mark_notifications_seen(user: dict = Depends(get_current_user)):
+async def mark_notifications_seen(body: MarkSeenInput = MarkSeenInput(), user: dict = Depends(get_current_user)):
     if user.get("role") != "player":
         return {"ok": True}
-    await db.notifications.update_many(
-        {"player_id": user["id"], "seen": False},
-        {"$set": {"seen": True}},
-    )
+    query = {"player_id": user["id"], "seen": False}
+    if body.ids:
+        query["id"] = {"$in": body.ids}
+    await db.notifications.update_many(query, {"$set": {"seen": True}})
     return {"ok": True}
 
 

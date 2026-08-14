@@ -60,6 +60,7 @@ function App() {
       <BrowserRouter>
         <AuthProvider>
           <AppRoutes />
+          <NotificationPoller />
           <Toaster
             theme="dark"
             position="top-right"
