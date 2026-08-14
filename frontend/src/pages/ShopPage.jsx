@@ -56,7 +56,7 @@ export default function ShopPage() {
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-300 via-cyan-300 to-sky-400">Bag of Wonders</span>
           </h1>
           <p className="font-mono text-xs text-sky-400/70 mt-3 tracking-wider max-w-lg">
-            &gt; &ldquo;Constellation, what will you offer your incarnation today?&rdquo;
+            &gt; Choose well, incarnation. The Constellations are watching.
           </p>
         </div>
       </div>

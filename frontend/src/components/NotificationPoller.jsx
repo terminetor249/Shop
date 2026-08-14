@@ -77,7 +77,9 @@ export default function NotificationPoller() {
 
 function NotificationOverlay({ notif, remaining, onDismiss }) {
   const isScenario = notif.kind === "scenario_cleared";
+  const isConstellation = notif.kind === "constellation";
   const positive = notif.amount >= 0;
+  const hasCoins = notif.amount && notif.amount !== 0;
 
   const accent = isScenario
     ? { ring: "ring-cyan-400/70", glow: "shadow-[0_0_80px_10px_rgba(34,211,238,0.4)]", chip: "bg-cyan-400/20 text-cyan-200 border-cyan-400/60", Icon: Sparkles }
@@ -86,19 +88,37 @@ function NotificationOverlay({ notif, remaining, onDismiss }) {
       : { ring: "ring-red-400/70", glow: "shadow-[0_0_80px_10px_rgba(239,68,68,0.35)]", chip: "bg-red-500/20 text-red-200 border-red-400/60", Icon: Coins };
   const AccentIcon = accent.Icon;
 
+  // Header chip label
   const header = isScenario
     ? "[ SCENARIO CLEARED ]"
-    : positive
-      ? "[ SPONSORSHIP TRANSMISSION ]"
-      : "[ SYSTEM DEDUCTION ]";
+    : notif.many_constellations
+      ? "[ CHORUS OF CONSTELLATIONS ]"
+      : "[ CONSTELLATION MESSAGE ]";
 
-  const title = isScenario
-    ? notif.title.replace(/^Scenario Cleared — /, "")
-    : notif.title;
+  // Primary line — ORV-styled
+  let primaryLine;
+  if (isScenario) {
+    primaryLine = notif.scenario_title || (notif.reason || "");
+  } else if (notif.many_constellations) {
+    primaryLine = `Many constellations ${notif.reason || ""}`;
+  } else {
+    const name = notif.constellation_name || "Unknown";
+    primaryLine = `The constellation ${name}, ${notif.reason || ""}`;
+  }
 
-  const bigNumber = notif.amount !== 0
-    ? `${positive ? "+" : ""}${notif.amount}`
-    : null;
+  // Secondary sponsorship line
+  let sponsorLine = null;
+  if (hasCoins) {
+    if (isScenario) {
+      sponsorLine = positive
+        ? `You've been rewarded ${notif.amount} coins`
+        : `You've lost ${Math.abs(notif.amount)} coins`;
+    } else {
+      sponsorLine = positive
+        ? `You've been sponsored ${notif.amount} coins`
+        : `You've been fined ${Math.abs(notif.amount)} coins`;
+    }
+  }
 
   return (
     <div
@@ -143,27 +163,30 @@ function NotificationOverlay({ notif, remaining, onDismiss }) {
           </div>
         </div>
 
-        {/* Title */}
-        <h2 className="font-display font-black text-3xl sm:text-4xl text-sky-50 text-center tracking-tight leading-tight">
-          {title}
-        </h2>
+        {/* Primary line — bracketed ORV quote */}
+        <div className="mt-1">
+          <p className="font-display font-bold text-2xl sm:text-[26px] text-sky-50 text-center tracking-tight leading-snug">
+            <span className="text-sky-300">[</span>
+            {isConstellation ? (
+              <>
+                {notif.many_constellations ? (
+                  <>Many constellations </>
+                ) : (
+                  <>The constellation <span className="text-yellow-200">{notif.constellation_name || "Unknown"}</span>, </>
+                )}
+                <span className="text-sky-100">{notif.reason}</span>
+              </>
+            ) : (
+              <span className="text-sky-100">{primaryLine}</span>
+            )}
+            <span className="text-sky-300">]</span>
+          </p>
+        </div>
 
-        {/* Amount */}
-        {bigNumber && (
-          <div className={`text-center mt-4 font-mono font-bold text-2xl ${positive ? "text-yellow-300" : "text-red-300"}`}>
-            {bigNumber} <span className="text-[10px] uppercase tracking-[0.3em] text-sky-300/70">coins</span>
-          </div>
-        )}
-
-        {/* Message */}
-        {notif.message && (
-          <div className="mt-6 p-4 border border-sky-400/20 bg-sky-950/40 rounded-lg">
-            <div className="font-mono text-[9px] uppercase tracking-[0.3em] text-sky-400/70 mb-1">
-              &gt; message from the dokkaebi
-            </div>
-            <p className="font-mono text-sm text-sky-100 leading-relaxed">
-              {notif.message}
-            </p>
+        {/* Sponsorship line */}
+        {sponsorLine && (
+          <div className={`text-center mt-4 font-mono font-bold text-lg ${positive ? "text-yellow-300" : "text-red-300"}`}>
+            {sponsorLine}
           </div>
         )}
 

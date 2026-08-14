@@ -149,12 +149,20 @@ class ItemCreate(BaseModel):
     rank: str
     price: int = Field(ge=0)
     stock: int = Field(default=-1)  # -1 = unlimited
+    uses: Optional[int] = Field(default=None, ge=1)  # None = not consumable
     image_path: Optional[str] = None
 
 class GrantCoins(BaseModel):
     player_id: str
     amount: int
     reason: str
+
+class ConstellationBroadcast(BaseModel):
+    constellation_name: str = ""
+    many_constellations: bool = False
+    reason: str
+    amount: int = 0
+    player_ids: List[str] = []  # empty = all players
 
 class ScenarioCreate(BaseModel):
     title: str
@@ -296,22 +304,80 @@ async def delete_item(item_id: str, user: dict = Depends(require_admin)):
 
 
 # ---------- Coins & Transactions ----------
-async def _create_notification(player_id: str, kind: str, title: str, message: str, amount: int = 0):
+async def _create_notification(
+    player_id: str,
+    kind: str,
+    reason: str,
+    amount: int = 0,
+    constellation_name: str = "",
+    many_constellations: bool = False,
+    scenario_title: str = "",
+):
     doc = {
         "id": str(uuid.uuid4()),
         "player_id": player_id,
-        "kind": kind,  # "grant" | "scenario_cleared"
-        "title": title,
-        "message": message,
+        "kind": kind,  # "constellation" | "scenario_cleared"
+        "reason": reason,
         "amount": amount,
+        "constellation_name": constellation_name,
+        "many_constellations": many_constellations,
+        "scenario_title": scenario_title,
         "seen": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.notifications.insert_one(doc)
 
 
+@api_router.post("/constellation/send")
+async def constellation_send(body: ConstellationBroadcast, user: dict = Depends(require_admin)):
+    reason = body.reason.strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="Reason/message is required")
+    if not body.many_constellations and not body.constellation_name.strip():
+        raise HTTPException(status_code=400, detail="Constellation name is required (or tick 'Many constellations')")
+
+    # Resolve target players
+    if body.player_ids:
+        players = await db.users.find(
+            {"role": "player", "id": {"$in": body.player_ids}},
+            {"password_hash": 0, "_id": 0},
+        ).to_list(1000)
+    else:
+        players = await db.users.find({"role": "player"}, {"password_hash": 0, "_id": 0}).to_list(1000)
+
+    if not players:
+        raise HTTPException(status_code=404, detail="No matching players")
+
+    tx_type = "constellation"
+    constellation_display = "Many constellations" if body.many_constellations else f"The constellation {body.constellation_name.strip()}"
+
+    for p in players:
+        if body.amount != 0:
+            await db.users.update_one({"id": p["id"]}, {"$inc": {"coins": body.amount}})
+            tx = {
+                "id": str(uuid.uuid4()),
+                "player_id": p["id"],
+                "player_name": p["name"],
+                "amount": body.amount,
+                "reason": f"{constellation_display}: {reason}",
+                "type": tx_type,
+                "admin_id": user["id"],
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.transactions.insert_one(tx)
+        await _create_notification(
+            p["id"], "constellation",
+            reason=reason,
+            amount=body.amount,
+            constellation_name=body.constellation_name.strip(),
+            many_constellations=body.many_constellations,
+        )
+    return {"ok": True, "delivered_to": len(players)}
+
+
 @api_router.post("/grant-coins")
 async def grant_coins(body: GrantCoins, user: dict = Depends(require_admin)):
+    # Legacy: quick single-player grant. Uses Uriel as default constellation.
     player = await db.users.find_one({"id": body.player_id, "role": "player"})
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
@@ -327,21 +393,12 @@ async def grant_coins(body: GrantCoins, user: dict = Depends(require_admin)):
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.transactions.insert_one(tx)
-    # Player-facing notification: sponsorship from constellations
-    if body.amount > 0:
-        await _create_notification(
-            body.player_id, "grant",
-            "A Constellation Sponsors You",
-            f"{body.reason}",
-            body.amount,
-        )
-    else:
-        await _create_notification(
-            body.player_id, "grant",
-            "Coin Deduction",
-            f"{body.reason}",
-            body.amount,
-        )
+    await _create_notification(
+        body.player_id, "constellation",
+        reason=body.reason,
+        amount=body.amount,
+        constellation_name="Uriel",
+    )
     tx.pop("_id", None)
     return tx
 
@@ -385,20 +442,52 @@ async def purchase(body: PurchaseInput, user: dict = Depends(get_current_user)):
     }
     await db.transactions.insert_one(tx)
     # Add to inventory
+    snapshot = {k: v for k, v in item.items() if k != "_id"}
     inv = {
         "id": str(uuid.uuid4()),
         "player_id": user["id"],
         "item_id": item["id"],
-        "item_snapshot": {k: v for k, v in item.items() if k != "_id"},
+        "item_snapshot": snapshot,
+        "uses_remaining": item.get("uses"),  # None if not consumable
+        "used_up": False,
         "purchased_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.inventory.insert_one(inv)
     tx.pop("_id", None)
     return tx
 
+
+@api_router.post("/inventory/{inv_id}/use")
+async def use_item(inv_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] != "player":
+        raise HTTPException(status_code=403, detail="Only players can use items")
+    inv = await db.inventory.find_one({"id": inv_id, "player_id": user["id"]})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+    uses = inv.get("uses_remaining")
+    if uses is None:
+        raise HTTPException(status_code=400, detail="This item is not consumable")
+    if uses <= 0 or inv.get("used_up"):
+        raise HTTPException(status_code=400, detail="Item already used up")
+    new_uses = uses - 1
+    if new_uses <= 0:
+        await db.inventory.update_one(
+            {"id": inv_id},
+            {"$set": {"uses_remaining": 0, "used_up": True,
+                      "used_at": datetime.now(timezone.utc).isoformat()}},
+        )
+    else:
+        await db.inventory.update_one({"id": inv_id}, {"$set": {"uses_remaining": new_uses}})
+    doc = await db.inventory.find_one({"id": inv_id}, {"_id": 0})
+    return doc
+
+
 @api_router.get("/inventory")
 async def list_inventory(user: dict = Depends(get_current_user)):
     query = {} if user["role"] == "admin" else {"player_id": user["id"]}
+    # Hide used-up consumables from player's active vault
+    if user["role"] == "player":
+        query["used_up"] = {"$ne": True}
     docs = await db.inventory.find(query, {"_id": 0}).sort("purchased_at", -1).to_list(1000)
     return docs
 
@@ -477,9 +566,9 @@ async def complete_scenario(scenario_id: str, user: dict = Depends(require_admin
             await db.transactions.insert_one(tx)
         await _create_notification(
             p["id"], "scenario_cleared",
-            f"Scenario Cleared — {scenario['title']}",
-            scenario.get("reward") or (f"+{reward_coins} coins" if reward_coins else "You have cleared the scenario."),
-            reward_coins,
+            reason=scenario.get("reward") or (f"+{reward_coins} coins" if reward_coins else "You have cleared the scenario."),
+            amount=reward_coins,
+            scenario_title=scenario["title"],
         )
         awarded_ids.append(p["id"])
 

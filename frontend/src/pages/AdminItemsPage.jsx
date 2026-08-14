@@ -11,6 +11,7 @@ const empty = {
   rank: "F",
   price: 100,
   stock: -1,
+  uses: "",
   image_path: "",
 };
 
@@ -174,6 +175,19 @@ export default function AdminItemsPage() {
           />
         </div>
 
+        <div>
+          <label className="block text-[9px] uppercase tracking-widest text-sky-400 mb-2 font-mono">Uses per copy (blank = passive/permanent)</label>
+          <input
+            type="number"
+            min="1"
+            placeholder="e.g. 1 for a potion, 3 for a scroll"
+            data-testid="item-form-uses"
+            value={form.uses}
+            onChange={(e) => setForm({ ...form, uses: e.target.value })}
+            className="w-full px-3 py-2 bg-sky-950/50 border border-sky-400/20 rounded-lg text-sky-100 font-mono text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          />
+        </div>
+
         <div className="md:col-span-2">
           <label className="block text-[9px] uppercase tracking-widest text-sky-400 mb-2 font-mono">Description</label>
           <textarea
@@ -236,7 +250,7 @@ export default function AdminItemsPage() {
               <div className="flex-1 min-w-0">
                 <div className="font-display font-bold text-sky-100 truncate">{it.name}</div>
                 <div className="text-[10px] font-mono text-sky-400/70 uppercase tracking-widest">
-                  {it.category} · {it.price} coins · {it.stock === -1 ? "∞" : it.stock} stock
+                  {it.category} · {it.price} coins · {it.stock === -1 ? "∞" : it.stock} stock{it.uses ? ` · ${it.uses} use${it.uses === 1 ? "" : "s"}` : ""}
                 </div>
               </div>
               <button onClick={() => onEdit(it)} className="p-2 text-sky-300 hover:text-sky-100 hover:bg-sky-500/10 rounded-lg transition-colors" data-testid={`edit-item-${it.id}`}>
