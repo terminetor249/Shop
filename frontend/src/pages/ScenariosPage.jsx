@@ -78,12 +78,17 @@ function ScenarioSection({ title, scenarios, large = false }) {
             <div
               key={s.id}
               data-testid={`scenario-${s.id}`}
-              className={`glass-panel rounded-2xl border-l-4 ${meta.accent} ${large ? "p-8" : "p-5"}`}
+              className={`glass-panel rounded-2xl border-l-4 ${meta.accent} ${large ? "p-8" : "p-5"} ${s.cleared_at ? "opacity-70" : ""}`}
             >
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <span className={`${meta.color} text-sky-950 font-display font-bold text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full`}>
                   {meta.label}
                 </span>
+                {s.cleared_at && (
+                  <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-mono font-bold text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full">
+                    ✓ Cleared
+                  </span>
+                )}
               </div>
               <h3 className={`font-display font-black text-sky-100 tracking-tight ${large ? "text-3xl" : "text-lg"}`}>
                 {s.title}
@@ -93,9 +98,9 @@ function ScenarioSection({ title, scenarios, large = false }) {
                   {s.description}
                 </p>
               )}
-              {s.reward && (
+              {(s.reward || s.reward_coins > 0) && (
                 <div className={`mt-4 pt-3 border-t border-sky-400/10 font-mono text-yellow-300/90 ${large ? "text-sm" : "text-xs"}`}>
-                  &gt; Reward: {s.reward}
+                  &gt; Reward: {s.reward}{s.reward_coins > 0 ? ` (+${s.reward_coins} coins)` : ""}
                 </div>
               )}
             </div>

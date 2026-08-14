@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { Plus, Trash2, Edit3, Eye, EyeOff } from "lucide-react";
+import { Plus, Trash2, Edit3, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 
 const empty = {
   title: "",
@@ -9,6 +9,7 @@ const empty = {
   scenario_type: "main",
   visible_to: [],
   reward: "",
+  reward_coins: 0,
 };
 
 const TYPE_META = {
@@ -64,6 +65,7 @@ export default function AdminScenariosPage() {
       scenario_type: s.scenario_type,
       visible_to: s.visible_to || [],
       reward: s.reward || "",
+      reward_coins: s.reward_coins || 0,
     });
     setEditingId(s.id);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -74,6 +76,17 @@ export default function AdminScenariosPage() {
     await api.delete(`/scenarios/${id}`);
     toast.success("Scenario retired");
     load();
+  };
+
+  const onComplete = async (s) => {
+    if (!window.confirm(`Mark "${s.title}" as cleared? This will grant ${s.reward_coins || 0} coins to ${s.visible_to?.length ? s.visible_to.length + " selected player(s)" : "ALL players"}.`)) return;
+    try {
+      await api.post(`/scenarios/${s.id}/complete`);
+      toast.success("Scenario cleared — rewards dispatched");
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Complete failed");
+    }
   };
 
   return (
@@ -138,15 +151,28 @@ export default function AdminScenariosPage() {
           />
         </div>
 
-        <div>
-          <label className="block text-[9px] uppercase tracking-widest text-sky-400 mb-2 font-mono">Reward Description</label>
-          <input
-            data-testid="scenario-form-reward"
-            value={form.reward}
-            onChange={(e) => setForm({ ...form, reward: e.target.value })}
-            placeholder="200 coins + Star Piece"
-            className="w-full px-3 py-2 bg-sky-950/50 border border-sky-400/20 rounded-lg text-sky-100 font-mono text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
-          />
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-[9px] uppercase tracking-widest text-sky-400 mb-2 font-mono">Reward Description</label>
+            <input
+              data-testid="scenario-form-reward"
+              value={form.reward}
+              onChange={(e) => setForm({ ...form, reward: e.target.value })}
+              placeholder="A Star Piece + acclaim from Uriel"
+              className="w-full px-3 py-2 bg-sky-950/50 border border-sky-400/20 rounded-lg text-sky-100 font-mono text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            />
+          </div>
+          <div>
+            <label className="block text-[9px] uppercase tracking-widest text-sky-400 mb-2 font-mono">Reward Coins (auto-grant on clear)</label>
+            <input
+              type="number"
+              min="0"
+              data-testid="scenario-form-reward-coins"
+              value={form.reward_coins}
+              onChange={(e) => setForm({ ...form, reward_coins: parseInt(e.target.value) || 0 })}
+              className="w-full px-3 py-2 bg-sky-950/50 border border-sky-400/20 rounded-lg text-sky-100 font-mono text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            />
+          </div>
         </div>
 
         <div>
@@ -207,31 +233,46 @@ export default function AdminScenariosPage() {
           {scenarios.map((s) => {
             const meta = TYPE_META[s.scenario_type];
             const scope = s.visible_to?.length ? `${s.visible_to.length} player(s)` : "ALL";
+            const cleared = !!s.cleared_at;
             return (
               <div
                 key={s.id}
                 data-testid={`admin-scenario-${s.id}`}
-                className={`glass-panel rounded-2xl p-5 border-l-4 ${meta.accent}`}
+                className={`glass-panel rounded-2xl p-5 border-l-4 ${meta.accent} ${cleared ? "opacity-60" : ""}`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className={`${meta.color} text-sky-950 font-display font-bold text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full`}>
                         {meta.label}
                       </span>
                       <span className="text-[10px] font-mono text-sky-400/70 uppercase tracking-widest flex items-center gap-1">
                         {s.visible_to?.length ? <EyeOff size={10} /> : <Eye size={10} />} {scope}
                       </span>
+                      {cleared && (
+                        <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-mono font-bold text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <CheckCircle2 size={10} /> Cleared
+                        </span>
+                      )}
                     </div>
                     <h3 className="font-display font-bold text-xl text-sky-100">{s.title}</h3>
                     {s.description && <p className="text-sm text-sky-300/80 mt-1 font-mono">{s.description}</p>}
-                    {s.reward && (
+                    {(s.reward || s.reward_coins > 0) && (
                       <div className="mt-2 text-xs font-mono text-yellow-300/90">
-                        &gt; Reward: {s.reward}
+                        &gt; Reward: {s.reward}{s.reward_coins > 0 ? ` (+${s.reward_coins} coins)` : ""}
                       </div>
                     )}
                   </div>
                   <div className="flex items-center gap-1">
+                    {!cleared && (
+                      <button
+                        onClick={() => onComplete(s)}
+                        className="px-3 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 font-mono text-[10px] uppercase tracking-widest transition-colors inline-flex items-center gap-1.5"
+                        data-testid={`complete-scenario-${s.id}`}
+                      >
+                        <CheckCircle2 size={12} /> Mark Cleared
+                      </button>
+                    )}
                     <button onClick={() => onEdit(s)} className="p-2 text-sky-300 hover:text-sky-100 hover:bg-sky-500/10 rounded-lg transition-colors" data-testid={`edit-scenario-${s.id}`}>
                       <Edit3 size={14} />
                     </button>

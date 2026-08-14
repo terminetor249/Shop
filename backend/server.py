@@ -162,6 +162,7 @@ class ScenarioCreate(BaseModel):
     scenario_type: Literal["main", "sub", "bounty"]
     visible_to: List[str] = []  # empty list = all players
     reward: str = ""
+    reward_coins: int = Field(default=0, ge=0)
 
 class PurchaseInput(BaseModel):
     item_id: str
@@ -295,6 +296,20 @@ async def delete_item(item_id: str, user: dict = Depends(require_admin)):
 
 
 # ---------- Coins & Transactions ----------
+async def _create_notification(player_id: str, kind: str, title: str, message: str, amount: int = 0):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "player_id": player_id,
+        "kind": kind,  # "grant" | "scenario_cleared"
+        "title": title,
+        "message": message,
+        "amount": amount,
+        "seen": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.notifications.insert_one(doc)
+
+
 @api_router.post("/grant-coins")
 async def grant_coins(body: GrantCoins, user: dict = Depends(require_admin)):
     player = await db.users.find_one({"id": body.player_id, "role": "player"})
@@ -312,6 +327,21 @@ async def grant_coins(body: GrantCoins, user: dict = Depends(require_admin)):
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.transactions.insert_one(tx)
+    # Player-facing notification: sponsorship from constellations
+    if body.amount > 0:
+        await _create_notification(
+            body.player_id, "grant",
+            "A Constellation Sponsors You",
+            f"{body.reason}",
+            body.amount,
+        )
+    else:
+        await _create_notification(
+            body.player_id, "grant",
+            "Coin Deduction",
+            f"{body.reason}",
+            body.amount,
+        )
     tx.pop("_id", None)
     return tx
 
@@ -406,6 +436,85 @@ async def update_scenario(scenario_id: str, body: ScenarioCreate, user: dict = D
 @api_router.delete("/scenarios/{scenario_id}")
 async def delete_scenario(scenario_id: str, user: dict = Depends(require_admin)):
     await db.scenarios.delete_one({"id": scenario_id})
+    return {"ok": True}
+
+
+@api_router.post("/scenarios/{scenario_id}/complete")
+async def complete_scenario(scenario_id: str, user: dict = Depends(require_admin)):
+    scenario = await db.scenarios.find_one({"id": scenario_id})
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    if scenario.get("cleared_at"):
+        raise HTTPException(status_code=400, detail="Scenario already cleared")
+
+    # Determine target players
+    visible_to = scenario.get("visible_to") or []
+    if visible_to:
+        players = await db.users.find(
+            {"role": "player", "id": {"$in": visible_to}},
+            {"password_hash": 0, "_id": 0},
+        ).to_list(1000)
+    else:
+        players = await db.users.find({"role": "player"}, {"password_hash": 0, "_id": 0}).to_list(1000)
+
+    reward_coins = int(scenario.get("reward_coins") or 0)
+    reason = f"Cleared scenario: {scenario['title']}"
+    awarded_ids = []
+
+    for p in players:
+        if reward_coins > 0:
+            await db.users.update_one({"id": p["id"]}, {"$inc": {"coins": reward_coins}})
+            tx = {
+                "id": str(uuid.uuid4()),
+                "player_id": p["id"],
+                "player_name": p["name"],
+                "amount": reward_coins,
+                "reason": reason,
+                "type": "scenario",
+                "scenario_id": scenario_id,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.transactions.insert_one(tx)
+        await _create_notification(
+            p["id"], "scenario_cleared",
+            f"Scenario Cleared — {scenario['title']}",
+            scenario.get("reward") or (f"+{reward_coins} coins" if reward_coins else "You have cleared the scenario."),
+            reward_coins,
+        )
+        awarded_ids.append(p["id"])
+
+    await db.scenarios.update_one(
+        {"id": scenario_id},
+        {"$set": {
+            "cleared_at": datetime.now(timezone.utc).isoformat(),
+            "cleared_by_admin": user["id"],
+            "awarded_player_ids": awarded_ids,
+        }},
+    )
+    doc = await db.scenarios.find_one({"id": scenario_id}, {"_id": 0})
+    return doc
+
+
+# ---------- Notifications (player-facing) ----------
+@api_router.get("/notifications")
+async def list_notifications(user: dict = Depends(get_current_user)):
+    if user.get("role") != "player":
+        return []
+    docs = await db.notifications.find(
+        {"player_id": user["id"], "seen": False},
+        {"_id": 0},
+    ).sort("created_at", 1).to_list(50)
+    return docs
+
+
+@api_router.post("/notifications/mark-seen")
+async def mark_notifications_seen(user: dict = Depends(get_current_user)):
+    if user.get("role") != "player":
+        return {"ok": True}
+    await db.notifications.update_many(
+        {"player_id": user["id"], "seen": False},
+        {"$set": {"seen": True}},
+    )
     return {"ok": True}
 
 

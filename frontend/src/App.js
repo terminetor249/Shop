@@ -12,6 +12,7 @@ import AdminItemsPage from "@/pages/AdminItemsPage";
 import AdminPlayersPage from "@/pages/AdminPlayersPage";
 import AdminScenariosPage from "@/pages/AdminScenariosPage";
 import AppShell from "@/components/AppShell";
+import NotificationPoller from "@/components/NotificationPoller";
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user } = useAuth();

@@ -32,7 +32,7 @@ export default function RegisterPage() {
             Join the Scenario
           </h1>
           <p className="font-mono text-xs text-sky-400/70 mt-2 tracking-wider">
-            REGISTER YOUR CONSTELLATION
+            REGISTER YOUR INCARNATION&apos;S NAME
           </p>
         </div>
 
