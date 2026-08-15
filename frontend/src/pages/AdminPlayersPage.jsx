@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { Coins, Send, Sparkles, Users, Star } from "lucide-react";
+import { Coins, Send, Sparkles, Users, Star, ChevronRight } from "lucide-react";
 
 export default function AdminPlayersPage() {
   const [players, setPlayers] = useState([]);
@@ -195,7 +196,7 @@ export default function AdminPlayersPage() {
               <div
                 key={p.id}
                 data-testid={`player-row-${p.id}`}
-                className="p-4 flex items-center gap-3"
+                className="p-4 flex items-center gap-3 hover:bg-sky-500/5"
               >
                 <div className="w-9 h-9 rounded-full flex items-center justify-center font-display font-black text-sky-950 bg-sky-500 text-sm">
                   {p.name.charAt(0).toUpperCase()}
@@ -208,6 +209,14 @@ export default function AdminPlayersPage() {
                   <Coins size={12} className="text-yellow-300" />
                   <span className="font-mono font-bold text-sky-100 text-sm">{p.coins}</span>
                 </div>
+                <Link
+                  to={`/admin/players/${p.id}`}
+                  data-testid={`player-detail-link-${p.id}`}
+                  className="ml-1 p-2 rounded-lg text-sky-300 hover:text-sky-100 hover:bg-sky-500/20 transition-colors"
+                  title="View stats and inventory"
+                >
+                  <ChevronRight size={14} />
+                </Link>
               </div>
             ))}
           </div>

@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { Coins, LogOut, ShoppingBag, ScrollText, ClipboardList, Backpack, Wrench } from "lucide-react";
+import { Coins, LogOut, ShoppingBag, ScrollText, ClipboardList, Backpack, Wrench, User } from "lucide-react";
 
 export default function AppShell({ children }) {
   const { user, logout } = useAuth();
@@ -10,6 +10,7 @@ export default function AppShell({ children }) {
   const playerLinks = [
     { to: "/", label: "Shop", icon: ShoppingBag, testid: "nav-shop" },
     { to: "/inventory", label: "Inventory", icon: Backpack, testid: "nav-inventory" },
+    { to: "/stats", label: "Stats", icon: User, testid: "nav-stats" },
     { to: "/scenarios", label: "Scenarios", icon: ScrollText, testid: "nav-scenarios" },
     { to: "/log", label: "Log", icon: ClipboardList, testid: "nav-log" },
   ];

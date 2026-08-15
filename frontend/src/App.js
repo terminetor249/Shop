@@ -8,8 +8,10 @@ import ShopPage from "@/pages/ShopPage";
 import InventoryPage from "@/pages/InventoryPage";
 import ScenariosPage from "@/pages/ScenariosPage";
 import TransactionLogPage from "@/pages/TransactionLogPage";
+import PlayerStatsPage from "@/pages/PlayerStatsPage";
 import AdminItemsPage from "@/pages/AdminItemsPage";
 import AdminPlayersPage from "@/pages/AdminPlayersPage";
+import AdminPlayerDetailPage from "@/pages/AdminPlayerDetailPage";
 import AdminScenariosPage from "@/pages/AdminScenariosPage";
 import AppShell from "@/components/AppShell";
 import NotificationPoller from "@/components/NotificationPoller";
@@ -43,11 +45,13 @@ function AppRoutes() {
       <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
       <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
       <Route path="/" element={<ProtectedRoute><ShopPage /></ProtectedRoute>} />
+      <Route path="/stats" element={<ProtectedRoute><PlayerStatsPage /></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><InventoryPage /></ProtectedRoute>} />
       <Route path="/scenarios" element={<ProtectedRoute><ScenariosPage /></ProtectedRoute>} />
       <Route path="/log" element={<ProtectedRoute><TransactionLogPage /></ProtectedRoute>} />
       <Route path="/admin/items" element={<ProtectedRoute adminOnly><AdminItemsPage /></ProtectedRoute>} />
       <Route path="/admin/players" element={<ProtectedRoute adminOnly><AdminPlayersPage /></ProtectedRoute>} />
+      <Route path="/admin/players/:id" element={<ProtectedRoute adminOnly><AdminPlayerDetailPage /></ProtectedRoute>} />
       <Route path="/admin/scenarios" element={<ProtectedRoute adminOnly><AdminScenariosPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -7,7 +7,7 @@ import { Package, Zap, Star, Sparkles, Coins, Play } from "lucide-react";
 const CATEGORY_ICON = {
   Items: Package,
   Skills: Zap,
-  Modifiers: Sparkles,
+  Story: Sparkles,
   "Star Relics": Star,
 };
 

@@ -131,7 +131,14 @@ def set_auth_cookie(response: Response, token: str):
 
 # ---------- Models ----------
 RANKS = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS", "Star Relic"]
-CATEGORIES = ["Items", "Skills", "Modifiers", "Star Relics"]
+CATEGORIES = ["Items", "Skills", "Story", "Star Relics"]
+STAT_KEYS = ("vigor", "strength", "agility", "status")
+DEFAULT_STATS = {k: 1 for k in STAT_KEYS}
+
+
+def compute_upgrade_cost(current_level: int, total: int) -> int:
+    return 100 + current_level * 50 + total * 20
+
 
 class RegisterInput(BaseModel):
     email: EmailStr
@@ -145,7 +152,7 @@ class LoginInput(BaseModel):
 class ItemCreate(BaseModel):
     name: str
     description: str = ""
-    category: Literal["Items", "Skills", "Modifiers", "Star Relics"]
+    category: Literal["Items", "Skills", "Story", "Star Relics"]
     rank: str
     price: int = Field(ge=0)
     stock: int = Field(default=-1)  # -1 = unlimited
@@ -175,6 +182,18 @@ class ScenarioCreate(BaseModel):
 class PurchaseInput(BaseModel):
     item_id: str
 
+class UpgradeInput(BaseModel):
+    stat: Literal["vigor", "strength", "agility", "status"]
+
+class AdjustInput(BaseModel):
+    stat: Literal["vigor", "strength", "agility", "status"]
+    delta: int
+
+class CapInput(BaseModel):
+    stat: Literal["vigor", "strength", "agility", "status"]
+    max: Optional[int] = None  # None removes cap
+    note: str = ""
+
 
 # ---------- Auth Routes ----------
 @api_router.post("/auth/register")
@@ -188,6 +207,8 @@ async def register(body: RegisterInput, response: Response):
         "name": body.name,
         "role": "player",
         "coins": 0,
+        "stats": dict(DEFAULT_STATS),
+        "stat_caps": {},
         "password_hash": hash_password(body.password),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -225,6 +246,105 @@ async def me(user: dict = Depends(get_current_user)):
 async def list_players(user: dict = Depends(get_current_user)):
     docs = await db.users.find({"role": "player"}, {"password_hash": 0, "_id": 0}).to_list(1000)
     return docs
+
+
+# ---------- Stats ----------
+@api_router.get("/stats")
+async def my_stats(user: dict = Depends(get_current_user)):
+    if user["role"] != "player":
+        raise HTTPException(status_code=403, detail="Players only")
+    fresh = await db.users.find_one({"id": user["id"]}, {"password_hash": 0, "_id": 0})
+    stats = fresh.get("stats") or dict(DEFAULT_STATS)
+    caps = fresh.get("stat_caps") or {}
+    total = sum(stats.values())
+    costs = {k: compute_upgrade_cost(stats[k], total) for k in STAT_KEYS}
+    return {"stats": stats, "stat_caps": caps, "total": total,
+            "upgrade_costs": costs, "coins": fresh.get("coins", 0)}
+
+
+@api_router.post("/stats/upgrade")
+async def upgrade_stat(body: UpgradeInput, user: dict = Depends(get_current_user)):
+    if user["role"] != "player":
+        raise HTTPException(status_code=403, detail="Players only")
+    fresh = await db.users.find_one({"id": user["id"]})
+    stats = fresh.get("stats") or dict(DEFAULT_STATS)
+    caps = fresh.get("stat_caps") or {}
+    current = stats.get(body.stat, 1)
+    total = sum(stats.values())
+    cost = compute_upgrade_cost(current, total)
+    cap_entry = caps.get(body.stat)
+    if cap_entry and cap_entry.get("max") is not None and current >= cap_entry["max"]:
+        note = cap_entry.get("note", "")
+        detail = f"{body.stat.title()} is capped at Lv {cap_entry['max']}"
+        if note:
+            detail += f" ({note})"
+        raise HTTPException(status_code=400, detail=detail)
+    if fresh.get("coins", 0) < cost:
+        raise HTTPException(status_code=400, detail=f"Not enough coins (need {cost})")
+    new_level = current + 1
+    stats[body.stat] = new_level
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"stats": stats}, "$inc": {"coins": -cost}},
+    )
+    tx = {
+        "id": str(uuid.uuid4()),
+        "player_id": user["id"],
+        "player_name": user["name"],
+        "amount": -cost,
+        "reason": f"Upgraded {body.stat.title()} to Lv {new_level}",
+        "type": "stat_upgrade",
+        "stat": body.stat,
+        "new_level": new_level,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.transactions.insert_one(tx)
+    updated = await db.users.find_one({"id": user["id"]}, {"password_hash": 0, "_id": 0})
+    return {"stats": stats, "coins": updated["coins"],
+            "cost": cost, "new_level": new_level, "stat": body.stat}
+
+
+# ---------- Admin: player detail + stat management ----------
+@api_router.get("/players/{player_id}")
+async def admin_player_detail(player_id: str, user: dict = Depends(require_admin)):
+    p = await db.users.find_one({"id": player_id, "role": "player"}, {"password_hash": 0, "_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Player not found")
+    inv = await db.inventory.find({"player_id": player_id}, {"_id": 0}).sort("purchased_at", -1).to_list(500)
+    stats = p.get("stats") or dict(DEFAULT_STATS)
+    return {
+        "player": p,
+        "stats": stats,
+        "stat_caps": p.get("stat_caps") or {},
+        "total": sum(stats.values()),
+        "inventory": inv,
+    }
+
+
+@api_router.post("/players/{player_id}/stats/adjust")
+async def admin_adjust_stat(player_id: str, body: AdjustInput, user: dict = Depends(require_admin)):
+    p = await db.users.find_one({"id": player_id, "role": "player"})
+    if not p:
+        raise HTTPException(status_code=404, detail="Player not found")
+    stats = p.get("stats") or dict(DEFAULT_STATS)
+    new_level = max(0, stats.get(body.stat, 1) + body.delta)
+    stats[body.stat] = new_level
+    await db.users.update_one({"id": player_id}, {"$set": {"stats": stats}})
+    return {"stats": stats}
+
+
+@api_router.post("/players/{player_id}/stats/cap")
+async def admin_set_cap(player_id: str, body: CapInput, user: dict = Depends(require_admin)):
+    p = await db.users.find_one({"id": player_id, "role": "player"})
+    if not p:
+        raise HTTPException(status_code=404, detail="Player not found")
+    caps = p.get("stat_caps") or {}
+    if body.max is None:
+        caps.pop(body.stat, None)
+    else:
+        caps[body.stat] = {"max": body.max, "note": body.note}
+    await db.users.update_one({"id": player_id}, {"$set": {"stat_caps": caps}})
+    return {"stat_caps": caps}
 
 
 # ---------- Upload ----------
@@ -657,6 +777,19 @@ async def startup_event():
     elif not verify_password(admin_password, existing["password_hash"]):
         await db.users.update_one({"email": admin_email},
                                   {"$set": {"password_hash": hash_password(admin_password)}})
+    # Migrations
+    try:
+        # Rename old category "Modifiers" -> "Story"
+        r = await db.items.update_many({"category": "Modifiers"}, {"$set": {"category": "Story"}})
+        if r.modified_count:
+            logger.info(f"Migrated {r.modified_count} items: Modifiers -> Story")
+        # Backfill stats + stat_caps for existing players
+        await db.users.update_many(
+            {"role": "player", "stats": {"$exists": False}},
+            {"$set": {"stats": dict(DEFAULT_STATS), "stat_caps": {}}},
+        )
+    except Exception as e:
+        logger.warning(f"migration: {e}")
     # Initialize storage
     init_storage()
 

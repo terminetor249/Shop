@@ -45,4 +45,16 @@ export const RANK_META = {
 };
 
 export const RANKS = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS", "Star Relic"];
-export const CATEGORIES = ["Items", "Skills", "Modifiers", "Star Relics"];
+export const CATEGORIES = ["Items", "Skills", "Story", "Star Relics"];
+
+export const STAT_KEYS = ["vigor", "strength", "agility", "status"];
+export const STAT_META = {
+  vigor: { label: "Vigor", color: "#ef4444", desc: "Endurance & vitality" },
+  strength: { label: "Strength", color: "#f97316", desc: "Raw physical power" },
+  agility: { label: "Agility", color: "#22d3ee", desc: "Speed & reflexes" },
+  status: { label: "Status", color: "#a855f7", desc: "Presence & influence" },
+};
+
+export function upgradeCost(currentLevel, total) {
+  return 100 + currentLevel * 50 + total * 20;
+}
