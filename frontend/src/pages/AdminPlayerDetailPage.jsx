@@ -3,9 +3,9 @@ import { useParams, Link } from "react-router-dom";
 import { api, API, STAT_KEYS, STAT_META } from "@/lib/api";
 import { toast } from "sonner";
 import RankBadge from "@/components/RankBadge";
-import { ArrowLeft, Coins, Heart, Sword, Wind, Crown, Plus, Minus, Lock, Save, X } from "lucide-react";
+import { ArrowLeft, Coins, Heart, Sword, Wind, Crown, Eye, Plus, Minus, Lock, Save, X, Sparkles } from "lucide-react";
 
-const STAT_ICON = { vigor: Heart, strength: Sword, agility: Wind, status: Crown };
+const STAT_ICON = { vigor: Heart, strength: Sword, agility: Wind, status: Crown, acuity: Eye };
 
 export default function AdminPlayerDetailPage() {
   const { id } = useParams();
@@ -67,7 +67,7 @@ export default function AdminPlayerDetailPage() {
 
   if (!data) return <div className="py-16 text-center font-mono text-sky-400/60 animate-pulse">[ FETCHING PLAYER RECORD... ]</div>;
 
-  const { player, stats, stat_caps, total, inventory } = data;
+  const { player, stats, stat_caps, total, inventory, vitals, unallocated_points } = data;
 
   return (
     <div className="space-y-8 animate-boot">
@@ -90,9 +90,13 @@ export default function AdminPlayerDetailPage() {
           </h1>
           <div className="text-xs font-mono text-sky-400/70 mt-1">{player.email}</div>
         </div>
-        <div className="flex gap-4 items-stretch">
+        <div className="flex flex-wrap gap-3 items-stretch">
           <StatChip label="Coins" value={player.coins} icon={<Coins size={14} className="text-yellow-300" />} />
           <StatChip label="Total Pts" value={total} />
+          <StatChip label="Free Pts" value={unallocated_points} icon={<Sparkles size={12} className="text-yellow-300" />} />
+          <StatChip label="HP" value={`${vitals.hp.current}/${vitals.hp.max}`} icon={<Heart size={12} className="text-red-400" />} />
+          <StatChip label="MP" value={`${vitals.mp.current}/${vitals.mp.max}`} />
+          <StatChip label="Stam" value={`${vitals.stamina.current}/${vitals.stamina.max}`} />
           <StatChip label="Inventory" value={inventory.length} />
         </div>
       </div>
@@ -102,7 +106,7 @@ export default function AdminPlayerDetailPage() {
         <div className="font-mono text-[10px] uppercase tracking-widest text-sky-400 mb-3">
           [ STAT MANAGEMENT ]
         </div>
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
           {STAT_KEYS.map((k) => {
             const meta = STAT_META[k];
             const Icon = STAT_ICON[k];

@@ -1,10 +1,20 @@
 import { useEffect, useState, useCallback } from "react";
-import { api, STAT_KEYS, STAT_META, upgradeCost } from "@/lib/api";
+import { api, STAT_KEYS, STAT_META } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { Coins, ArrowUp, Heart, Sword, Wind, Crown, Lock } from "lucide-react";
+import {
+  Coins, ArrowUp, Heart, Sword, Wind, Crown, Eye, Lock, Plus, Minus, RotateCw, Sparkles,
+} from "lucide-react";
 
-const STAT_ICON = { vigor: Heart, strength: Sword, agility: Wind, status: Crown };
+const STAT_ICON = {
+  vigor: Heart, strength: Sword, agility: Wind, status: Crown, acuity: Eye,
+};
+
+const VITAL_META = {
+  hp: { label: "Health", color: "#ef4444", from: "from-red-500", to: "to-rose-600", ring: "ring-red-400/40" },
+  mp: { label: "Mana", color: "#38bdf8", from: "from-sky-500", to: "to-cyan-500", ring: "ring-sky-400/40" },
+  stamina: { label: "Stamina", color: "#22c55e", from: "from-emerald-500", to: "to-lime-500", ring: "ring-emerald-400/40" },
+};
 
 export default function PlayerStatsPage() {
   const { refresh } = useAuth();
@@ -20,11 +30,12 @@ export default function PlayerStatsPage() {
   useEffect(() => { load(); }, [load]);
 
   const onUpgrade = async (stat) => {
-    setBusy(stat);
+    setBusy("upgrade:" + stat);
     try {
       const { data: res } = await api.post("/stats/upgrade", { stat });
-      toast.success(`${STAT_META[stat].label} → Lv ${res.new_level} (−${res.cost} coins)`);
-      load();
+      const newLevel = res.stats[stat];
+      toast.success(`${STAT_META[stat].label} → Lv ${newLevel}`);
+      setData(res);
       refresh();
     } catch (err) {
       toast.error(err.response?.data?.detail || "Upgrade failed");
@@ -32,7 +43,51 @@ export default function PlayerStatsPage() {
     setBusy(null);
   };
 
+  const onAllocate = async (stat) => {
+    setBusy("alloc:" + stat);
+    try {
+      const { data: res } = await api.post("/stats/allocate", { stat });
+      toast.success(`+1 ${STAT_META[stat].label} (free)`);
+      setData(res);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Allocate failed");
+    }
+    setBusy(null);
+  };
+
+  const onVital = async (which, delta) => {
+    if (!data) return;
+    const cur = data.vitals[which].current;
+    const max = data.vitals[which].max;
+    const nextVal = Math.max(0, Math.min(max, cur + delta));
+    setBusy("vital:" + which);
+    try {
+      const { data: res } = await api.post("/stats/vitals", { [which]: nextVal });
+      setData(res);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Update failed");
+    }
+    setBusy(null);
+  };
+
+  const restoreAll = async () => {
+    if (!data) return;
+    setBusy("restore");
+    try {
+      const { data: res } = await api.post("/stats/vitals", {
+        hp: data.vitals.hp.max,
+        mp: data.vitals.mp.max,
+        stamina: data.vitals.stamina.max,
+      });
+      setData(res);
+      toast.success("Vitals restored to max");
+    } catch { /* noop */ }
+    setBusy(null);
+  };
+
   if (!data) return <div className="py-16 text-center font-mono text-sky-400/60 animate-pulse">[ LOADING STATUS WINDOW... ]</div>;
+
+  const unallocated = data.unallocated_points;
 
   return (
     <div className="space-y-8 animate-boot">
@@ -45,11 +100,79 @@ export default function PlayerStatsPage() {
         </h1>
         <p className="font-mono text-xs text-sky-400/70 mt-3">
           &gt; Total Points: <span className="text-sky-200 font-bold">{data.total}</span>
-          <span className="ml-4">Cost Formula: <span className="text-yellow-300">100 + (L × 50) + (T × 20)</span></span>
+          <span className="ml-4">Cost Formula: <span className="text-yellow-300">100 + (L × 20) + (T × 5)</span></span>
         </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-5">
+      {/* Vitals */}
+      <div className="glass-panel rounded-2xl p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div className="font-mono text-[10px] uppercase tracking-widest text-sky-400">[ Vitals ]</div>
+          <button
+            onClick={restoreAll}
+            data-testid="restore-vitals"
+            disabled={busy === "restore"}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/30 text-sky-200 font-mono text-[10px] uppercase tracking-widest transition-colors"
+          >
+            <RotateCw size={11} /> Restore to Max
+          </button>
+        </div>
+        <div className="space-y-4">
+          {["hp", "mp", "stamina"].map((v) => (
+            <VitalBar
+              key={v}
+              which={v}
+              current={data.vitals[v].current}
+              max={data.vitals[v].max}
+              onDelta={(d) => onVital(v, d)}
+              disabled={busy === "vital:" + v}
+            />
+          ))}
+        </div>
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[9px] uppercase tracking-widest text-sky-400/60">
+          <div>&gt; HP = 10 + Vigor</div>
+          <div>&gt; MP = 400 + (Status − 1) × 50</div>
+          <div>&gt; Stamina = 4·Vigor + 6·Agility</div>
+        </div>
+      </div>
+
+      {/* Free points banner */}
+      {unallocated > 0 && (
+        <div className="glass-panel rounded-2xl p-5 border-l-4 border-yellow-400/70 ring-1 ring-yellow-400/30 shadow-[0_0_40px_-10px_rgba(250,204,21,0.5)]">
+          <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-lg bg-yellow-400/20 text-yellow-300 flex items-center justify-center">
+                <Sparkles size={20} />
+              </div>
+              <div>
+                <div className="font-display font-black text-xl text-sky-50 leading-none">
+                  {unallocated} Free Point{unallocated === 1 ? "" : "s"} Available
+                </div>
+                <div className="font-mono text-[10px] uppercase tracking-widest text-sky-400/70 mt-1">
+                  Allocate directly to any stat — no coins required
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {STAT_KEYS.map((k) => (
+                <button
+                  key={k}
+                  onClick={() => onAllocate(k)}
+                  disabled={busy === "alloc:" + k}
+                  data-testid={`allocate-${k}`}
+                  className="px-3 py-1.5 rounded-full bg-sky-950/60 hover:bg-sky-500/20 border border-sky-400/30 text-sky-100 font-mono text-[10px] uppercase tracking-widest transition-colors inline-flex items-center gap-1"
+                >
+                  <Plus size={10} />
+                  {STAT_META[k].label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stats grid */}
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
         {STAT_KEYS.map((k) => {
           const meta = STAT_META[k];
           const Icon = STAT_ICON[k];
@@ -58,7 +181,7 @@ export default function PlayerStatsPage() {
           const cap = data.stat_caps?.[k];
           const capped = cap?.max != null && level >= cap.max;
           const canAfford = data.coins >= cost;
-          const disabled = capped || !canAfford || busy === k;
+          const disabled = capped || !canAfford || busy === "upgrade:" + k;
 
           return (
             <div
@@ -118,7 +241,7 @@ export default function PlayerStatsPage() {
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-sky-950 font-display font-bold uppercase text-xs tracking-widest disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors"
                 >
                   <ArrowUp size={12} />
-                  {capped ? "Locked" : !canAfford ? "Need coins" : busy === k ? "..." : "Upgrade"}
+                  {capped ? "Locked" : !canAfford ? "Need coins" : busy === ("upgrade:" + k) ? "..." : "Upgrade"}
                 </button>
               </div>
             </div>
@@ -127,7 +250,45 @@ export default function PlayerStatsPage() {
       </div>
 
       <div className="glass-panel rounded-xl p-4 font-mono text-[10px] uppercase tracking-widest text-sky-400/70">
-        &gt; Upgrading any stat also increases the cost of the others (Global Drag Coefficient: 20).
+        &gt; Upgrading any stat also increases the cost of the others (Global Drag Coefficient: 5).
+      </div>
+    </div>
+  );
+}
+
+function VitalBar({ which, current, max, onDelta, disabled }) {
+  const meta = VITAL_META[which];
+  const pct = max > 0 ? Math.max(0, Math.min(100, (current / max) * 100)) : 0;
+  return (
+    <div data-testid={`vital-${which}`} className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-sky-200">
+          <span style={{ color: meta.color }} className="font-bold">{meta.label}</span>
+          <span className="text-sky-400/60" data-testid={`vital-${which}-values`}>{current} / {max}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          {[-10, -1, +1, +10].map((d) => (
+            <button
+              key={d}
+              onClick={() => onDelta(d)}
+              disabled={disabled}
+              data-testid={`vital-${which}-${d > 0 ? "plus" : "minus"}${Math.abs(d)}`}
+              className={`w-9 h-7 rounded-md text-[10px] font-mono font-bold uppercase tracking-widest transition-colors ${
+                d > 0
+                  ? "bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200"
+                  : "bg-red-500/20 hover:bg-red-500/30 text-red-200"
+              }`}
+            >
+              {d > 0 ? `+${d}` : d}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className={`relative h-3 rounded-full bg-sky-950/70 overflow-hidden ring-1 ${meta.ring}`}>
+        <div
+          className={`h-full bg-gradient-to-r ${meta.from} ${meta.to} transition-all duration-300`}
+          style={{ width: `${pct}%` }}
+        />
       </div>
     </div>
   );

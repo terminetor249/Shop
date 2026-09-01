@@ -132,12 +132,33 @@ def set_auth_cookie(response: Response, token: str):
 # ---------- Models ----------
 RANKS = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS", "Star Relic"]
 CATEGORIES = ["Items", "Skills", "Story", "Star Relics"]
-STAT_KEYS = ("vigor", "strength", "agility", "status")
-DEFAULT_STATS = {k: 1 for k in STAT_KEYS}
+STAT_KEYS = ("vigor", "strength", "agility", "status", "acuity")
+DEFAULT_STATS = {k: 10 for k in STAT_KEYS}
+STARTING_FREE_POINTS = 25
 
 
 def compute_upgrade_cost(current_level: int, total: int) -> int:
-    return 100 + current_level * 50 + total * 20
+    return 100 + current_level * 20 + total * 5
+
+
+def compute_hp_max(stats: dict) -> int:
+    return 10 + int(stats.get("vigor", 0))
+
+
+def compute_mp_max(stats: dict) -> int:
+    return 400 + (int(stats.get("status", 0)) - 1) * 50
+
+
+def compute_stamina_max(stats: dict) -> int:
+    return 4 * int(stats.get("vigor", 0)) + 6 * int(stats.get("agility", 0))
+
+
+def vitals_max(stats: dict) -> dict:
+    return {
+        "hp": compute_hp_max(stats),
+        "mp": compute_mp_max(stats),
+        "stamina": compute_stamina_max(stats),
+    }
 
 
 class RegisterInput(BaseModel):
@@ -182,17 +203,27 @@ class ScenarioCreate(BaseModel):
 class PurchaseInput(BaseModel):
     item_id: str
 
+StatName = Literal["vigor", "strength", "agility", "status", "acuity"]
+
 class UpgradeInput(BaseModel):
-    stat: Literal["vigor", "strength", "agility", "status"]
+    stat: StatName
+
+class AllocateInput(BaseModel):
+    stat: StatName
 
 class AdjustInput(BaseModel):
-    stat: Literal["vigor", "strength", "agility", "status"]
+    stat: StatName
     delta: int
 
 class CapInput(BaseModel):
-    stat: Literal["vigor", "strength", "agility", "status"]
+    stat: StatName
     max: Optional[int] = None  # None removes cap
     note: str = ""
+
+class VitalsInput(BaseModel):
+    hp: Optional[int] = None
+    mp: Optional[int] = None
+    stamina: Optional[int] = None
 
 
 # ---------- Auth Routes ----------
@@ -209,6 +240,10 @@ async def register(body: RegisterInput, response: Response):
         "coins": 0,
         "stats": dict(DEFAULT_STATS),
         "stat_caps": {},
+        "unallocated_points": STARTING_FREE_POINTS,
+        "hp_current": compute_hp_max(DEFAULT_STATS),
+        "mp_current": compute_mp_max(DEFAULT_STATS),
+        "stamina_current": compute_stamina_max(DEFAULT_STATS),
         "password_hash": hash_password(body.password),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -249,17 +284,58 @@ async def list_players(user: dict = Depends(get_current_user)):
 
 
 # ---------- Stats ----------
+def _serialize_stats(fresh: dict) -> dict:
+    stats = fresh.get("stats") or dict(DEFAULT_STATS)
+    caps = fresh.get("stat_caps") or {}
+    total = sum(stats.values())
+    costs = {k: compute_upgrade_cost(stats[k], total) for k in STAT_KEYS}
+    maxes = vitals_max(stats)
+    return {
+        "stats": stats,
+        "stat_caps": caps,
+        "total": total,
+        "upgrade_costs": costs,
+        "unallocated_points": int(fresh.get("unallocated_points", 0)),
+        "coins": int(fresh.get("coins", 0)),
+        "vitals": {
+            "hp": {"current": int(fresh.get("hp_current", maxes["hp"])), "max": maxes["hp"]},
+            "mp": {"current": int(fresh.get("mp_current", maxes["mp"])), "max": maxes["mp"]},
+            "stamina": {"current": int(fresh.get("stamina_current", maxes["stamina"])), "max": maxes["stamina"]},
+        },
+    }
+
+
 @api_router.get("/stats")
 async def my_stats(user: dict = Depends(get_current_user)):
     if user["role"] != "player":
         raise HTTPException(status_code=403, detail="Players only")
     fresh = await db.users.find_one({"id": user["id"]}, {"password_hash": 0, "_id": 0})
+    return _serialize_stats(fresh)
+
+
+@api_router.post("/stats/allocate")
+async def allocate_point(body: AllocateInput, user: dict = Depends(get_current_user)):
+    if user["role"] != "player":
+        raise HTTPException(status_code=403, detail="Players only")
+    fresh = await db.users.find_one({"id": user["id"]})
+    unallocated = int(fresh.get("unallocated_points", 0))
+    if unallocated <= 0:
+        raise HTTPException(status_code=400, detail="No free points remaining")
     stats = fresh.get("stats") or dict(DEFAULT_STATS)
     caps = fresh.get("stat_caps") or {}
-    total = sum(stats.values())
-    costs = {k: compute_upgrade_cost(stats[k], total) for k in STAT_KEYS}
-    return {"stats": stats, "stat_caps": caps, "total": total,
-            "upgrade_costs": costs, "coins": fresh.get("coins", 0)}
+    cap_entry = caps.get(body.stat)
+    if cap_entry and cap_entry.get("max") is not None and stats.get(body.stat, 0) >= cap_entry["max"]:
+        detail = f"{body.stat.title()} is capped at Lv {cap_entry['max']}"
+        if cap_entry.get("note"):
+            detail += f" ({cap_entry['note']})"
+        raise HTTPException(status_code=400, detail=detail)
+    stats[body.stat] = stats.get(body.stat, 0) + 1
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"stats": stats}, "$inc": {"unallocated_points": -1}},
+    )
+    updated = await db.users.find_one({"id": user["id"]}, {"password_hash": 0, "_id": 0})
+    return _serialize_stats(updated)
 
 
 @api_router.post("/stats/upgrade")
@@ -269,7 +345,7 @@ async def upgrade_stat(body: UpgradeInput, user: dict = Depends(get_current_user
     fresh = await db.users.find_one({"id": user["id"]})
     stats = fresh.get("stats") or dict(DEFAULT_STATS)
     caps = fresh.get("stat_caps") or {}
-    current = stats.get(body.stat, 1)
+    current = stats.get(body.stat, 0)
     total = sum(stats.values())
     cost = compute_upgrade_cost(current, total)
     cap_entry = caps.get(body.stat)
@@ -300,8 +376,27 @@ async def upgrade_stat(body: UpgradeInput, user: dict = Depends(get_current_user
     }
     await db.transactions.insert_one(tx)
     updated = await db.users.find_one({"id": user["id"]}, {"password_hash": 0, "_id": 0})
-    return {"stats": stats, "coins": updated["coins"],
-            "cost": cost, "new_level": new_level, "stat": body.stat}
+    return _serialize_stats(updated)
+
+
+@api_router.post("/stats/vitals")
+async def set_vitals(body: VitalsInput, user: dict = Depends(get_current_user)):
+    if user["role"] != "player":
+        raise HTTPException(status_code=403, detail="Players only")
+    fresh = await db.users.find_one({"id": user["id"]})
+    stats = fresh.get("stats") or dict(DEFAULT_STATS)
+    maxes = vitals_max(stats)
+    updates = {}
+    if body.hp is not None:
+        updates["hp_current"] = max(0, min(int(body.hp), maxes["hp"]))
+    if body.mp is not None:
+        updates["mp_current"] = max(0, min(int(body.mp), maxes["mp"]))
+    if body.stamina is not None:
+        updates["stamina_current"] = max(0, min(int(body.stamina), maxes["stamina"]))
+    if updates:
+        await db.users.update_one({"id": user["id"]}, {"$set": updates})
+    updated = await db.users.find_one({"id": user["id"]}, {"password_hash": 0, "_id": 0})
+    return _serialize_stats(updated)
 
 
 # ---------- Admin: player detail + stat management ----------
@@ -311,12 +406,10 @@ async def admin_player_detail(player_id: str, user: dict = Depends(require_admin
     if not p:
         raise HTTPException(status_code=404, detail="Player not found")
     inv = await db.inventory.find({"player_id": player_id}, {"_id": 0}).sort("purchased_at", -1).to_list(500)
-    stats = p.get("stats") or dict(DEFAULT_STATS)
+    serial = _serialize_stats(p)
     return {
         "player": p,
-        "stats": stats,
-        "stat_caps": p.get("stat_caps") or {},
-        "total": sum(stats.values()),
+        **serial,
         "inventory": inv,
     }
 
@@ -327,7 +420,7 @@ async def admin_adjust_stat(player_id: str, body: AdjustInput, user: dict = Depe
     if not p:
         raise HTTPException(status_code=404, detail="Player not found")
     stats = p.get("stats") or dict(DEFAULT_STATS)
-    new_level = max(0, stats.get(body.stat, 1) + body.delta)
+    new_level = max(0, stats.get(body.stat, 0) + body.delta)
     stats[body.stat] = new_level
     await db.users.update_one({"id": player_id}, {"$set": {"stats": stats}})
     return {"stats": stats}
@@ -783,11 +876,31 @@ async def startup_event():
         r = await db.items.update_many({"category": "Modifiers"}, {"$set": {"category": "Story"}})
         if r.modified_count:
             logger.info(f"Migrated {r.modified_count} items: Modifiers -> Story")
-        # Backfill stats + stat_caps for existing players
-        await db.users.update_many(
-            {"role": "player", "stats": {"$exists": False}},
-            {"$set": {"stats": dict(DEFAULT_STATS), "stat_caps": {}}},
-        )
+        # Backfill stats for players missing new fields (safe: preserves progression)
+        async for u in db.users.find({"role": "player"}):
+            existing_stats = u.get("stats") or {}
+            new_stats = dict(existing_stats)
+            missing_stat = False
+            for k in STAT_KEYS:
+                if k not in new_stats:
+                    new_stats[k] = 10
+                    missing_stat = True
+            set_updates = {}
+            if missing_stat:
+                set_updates["stats"] = new_stats
+            if "unallocated_points" not in u:
+                # Existing players: only get free points if their sheet is fully "fresh"
+                # (i.e., missing acuity means fresh migration → grant 25)
+                set_updates["unallocated_points"] = STARTING_FREE_POINTS if "acuity" not in existing_stats else 0
+            maxes = vitals_max(new_stats)
+            if u.get("hp_current") is None:
+                set_updates["hp_current"] = maxes["hp"]
+            if u.get("mp_current") is None:
+                set_updates["mp_current"] = maxes["mp"]
+            if u.get("stamina_current") is None:
+                set_updates["stamina_current"] = maxes["stamina"]
+            if set_updates:
+                await db.users.update_one({"id": u["id"]}, {"$set": set_updates})
     except Exception as e:
         logger.warning(f"migration: {e}")
     # Initialize storage
