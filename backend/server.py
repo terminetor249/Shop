@@ -138,7 +138,35 @@ STARTING_FREE_POINTS = 25
 
 
 def compute_upgrade_cost(current_level: int, total: int) -> int:
-    return 100 + current_level * 20 + total * 5
+    return 100 + current_level * 20 + total * 10
+
+
+async def _apply_stats_change(user_id: str, fresh: dict, new_stats: dict,
+                              coin_delta: int = 0, unallocated_delta: int = 0):
+    """Update stats and scale current vitals by the max delta so ratios stay in tune."""
+    old_stats = fresh.get("stats") or dict(DEFAULT_STATS)
+    old_max = vitals_max(old_stats)
+    new_max = vitals_max(new_stats)
+    hp_cur = int(fresh.get("hp_current", old_max["hp"]))
+    mp_cur = int(fresh.get("mp_current", old_max["mp"]))
+    st_cur = int(fresh.get("stamina_current", old_max["stamina"]))
+    hp_cur = max(0, min(new_max["hp"], hp_cur + (new_max["hp"] - old_max["hp"])))
+    mp_cur = max(0, min(new_max["mp"], mp_cur + (new_max["mp"] - old_max["mp"])))
+    st_cur = max(0, min(new_max["stamina"], st_cur + (new_max["stamina"] - old_max["stamina"])))
+    ops = {"$set": {
+        "stats": new_stats,
+        "hp_current": hp_cur,
+        "mp_current": mp_cur,
+        "stamina_current": st_cur,
+    }}
+    inc = {}
+    if coin_delta:
+        inc["coins"] = coin_delta
+    if unallocated_delta:
+        inc["unallocated_points"] = unallocated_delta
+    if inc:
+        ops["$inc"] = inc
+    await db.users.update_one({"id": user_id}, ops)
 
 
 def compute_hp_max(stats: dict) -> int:
@@ -321,7 +349,7 @@ async def allocate_point(body: AllocateInput, user: dict = Depends(get_current_u
     unallocated = int(fresh.get("unallocated_points", 0))
     if unallocated <= 0:
         raise HTTPException(status_code=400, detail="No free points remaining")
-    stats = fresh.get("stats") or dict(DEFAULT_STATS)
+    stats = dict(fresh.get("stats") or DEFAULT_STATS)
     caps = fresh.get("stat_caps") or {}
     cap_entry = caps.get(body.stat)
     if cap_entry and cap_entry.get("max") is not None and stats.get(body.stat, 0) >= cap_entry["max"]:
@@ -330,10 +358,7 @@ async def allocate_point(body: AllocateInput, user: dict = Depends(get_current_u
             detail += f" ({cap_entry['note']})"
         raise HTTPException(status_code=400, detail=detail)
     stats[body.stat] = stats.get(body.stat, 0) + 1
-    await db.users.update_one(
-        {"id": user["id"]},
-        {"$set": {"stats": stats}, "$inc": {"unallocated_points": -1}},
-    )
+    await _apply_stats_change(user["id"], fresh, stats, unallocated_delta=-1)
     updated = await db.users.find_one({"id": user["id"]}, {"password_hash": 0, "_id": 0})
     return _serialize_stats(updated)
 
@@ -343,7 +368,7 @@ async def upgrade_stat(body: UpgradeInput, user: dict = Depends(get_current_user
     if user["role"] != "player":
         raise HTTPException(status_code=403, detail="Players only")
     fresh = await db.users.find_one({"id": user["id"]})
-    stats = fresh.get("stats") or dict(DEFAULT_STATS)
+    stats = dict(fresh.get("stats") or DEFAULT_STATS)
     caps = fresh.get("stat_caps") or {}
     current = stats.get(body.stat, 0)
     total = sum(stats.values())
@@ -359,10 +384,7 @@ async def upgrade_stat(body: UpgradeInput, user: dict = Depends(get_current_user
         raise HTTPException(status_code=400, detail=f"Not enough coins (need {cost})")
     new_level = current + 1
     stats[body.stat] = new_level
-    await db.users.update_one(
-        {"id": user["id"]},
-        {"$set": {"stats": stats}, "$inc": {"coins": -cost}},
-    )
+    await _apply_stats_change(user["id"], fresh, stats, coin_delta=-cost)
     tx = {
         "id": str(uuid.uuid4()),
         "player_id": user["id"],
@@ -421,9 +443,10 @@ async def admin_adjust_stat(player_id: str, body: AdjustInput, user: dict = Depe
         raise HTTPException(status_code=404, detail="Player not found")
     stats = p.get("stats") or dict(DEFAULT_STATS)
     new_level = max(0, stats.get(body.stat, 0) + body.delta)
-    stats[body.stat] = new_level
-    await db.users.update_one({"id": player_id}, {"$set": {"stats": stats}})
-    return {"stats": stats}
+    new_stats = dict(stats)
+    new_stats[body.stat] = new_level
+    await _apply_stats_change(player_id, p, new_stats)
+    return {"stats": new_stats}
 
 
 @api_router.post("/players/{player_id}/stats/cap")

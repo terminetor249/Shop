@@ -12,6 +12,7 @@ import PlayerStatsPage from "@/pages/PlayerStatsPage";
 import AdminItemsPage from "@/pages/AdminItemsPage";
 import AdminPlayersPage from "@/pages/AdminPlayersPage";
 import AdminPlayerDetailPage from "@/pages/AdminPlayerDetailPage";
+import AdminPartyOverviewPage from "@/pages/AdminPartyOverviewPage";
 import AdminScenariosPage from "@/pages/AdminScenariosPage";
 import AppShell from "@/components/AppShell";
 import NotificationPoller from "@/components/NotificationPoller";
@@ -50,6 +51,7 @@ function AppRoutes() {
       <Route path="/scenarios" element={<ProtectedRoute><ScenariosPage /></ProtectedRoute>} />
       <Route path="/log" element={<ProtectedRoute><TransactionLogPage /></ProtectedRoute>} />
       <Route path="/admin/items" element={<ProtectedRoute adminOnly><AdminItemsPage /></ProtectedRoute>} />
+      <Route path="/admin/party" element={<ProtectedRoute adminOnly><AdminPartyOverviewPage /></ProtectedRoute>} />
       <Route path="/admin/players" element={<ProtectedRoute adminOnly><AdminPlayersPage /></ProtectedRoute>} />
       <Route path="/admin/players/:id" element={<ProtectedRoute adminOnly><AdminPlayerDetailPage /></ProtectedRoute>} />
       <Route path="/admin/scenarios" element={<ProtectedRoute adminOnly><AdminScenariosPage /></ProtectedRoute>} />

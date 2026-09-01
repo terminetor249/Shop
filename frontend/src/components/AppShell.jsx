@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { Coins, LogOut, ShoppingBag, ScrollText, ClipboardList, Backpack, Wrench, User } from "lucide-react";
+import { Coins, LogOut, ShoppingBag, ScrollText, ClipboardList, Backpack, Wrench, User, Users } from "lucide-react";
 
 export default function AppShell({ children }) {
   const { user, logout } = useAuth();
@@ -16,8 +16,9 @@ export default function AppShell({ children }) {
   ];
   const adminLinks = [
     { to: "/", label: "Shop", icon: ShoppingBag, testid: "nav-shop" },
-    { to: "/admin/items", label: "Manage Items", icon: Wrench, testid: "nav-admin-items" },
-    { to: "/admin/players", label: "Players", icon: Coins, testid: "nav-admin-players" },
+    { to: "/admin/items", label: "Items", icon: Wrench, testid: "nav-admin-items" },
+    { to: "/admin/party", label: "Party", icon: Users, testid: "nav-admin-party" },
+    { to: "/admin/players", label: "Broadcast", icon: Coins, testid: "nav-admin-players" },
     { to: "/admin/scenarios", label: "Scenarios", icon: ScrollText, testid: "nav-admin-scenarios" },
     { to: "/log", label: "Log", icon: ClipboardList, testid: "nav-log" },
   ];

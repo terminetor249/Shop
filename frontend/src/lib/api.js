@@ -57,5 +57,5 @@ export const STAT_META = {
 };
 
 export function upgradeCost(currentLevel, total) {
-  return 100 + currentLevel * 20 + total * 5;
+  return 100 + currentLevel * 20 + total * 10;
 }

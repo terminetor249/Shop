@@ -100,7 +100,7 @@ export default function PlayerStatsPage() {
         </h1>
         <p className="font-mono text-xs text-sky-400/70 mt-3">
           &gt; Total Points: <span className="text-sky-200 font-bold">{data.total}</span>
-          <span className="ml-4">Cost Formula: <span className="text-yellow-300">100 + (L × 20) + (T × 5)</span></span>
+          <span className="ml-4">Cost Formula: <span className="text-yellow-300">100 + (L × 20) + (T × 10)</span></span>
         </p>
       </div>
 
@@ -250,7 +250,7 @@ export default function PlayerStatsPage() {
       </div>
 
       <div className="glass-panel rounded-xl p-4 font-mono text-[10px] uppercase tracking-widest text-sky-400/70">
-        &gt; Upgrading any stat also increases the cost of the others (Global Drag Coefficient: 5).
+        &gt; Upgrading any stat also increases the cost of the others (Global Drag Coefficient: 10).
       </div>
     </div>
   );
@@ -259,9 +259,18 @@ export default function PlayerStatsPage() {
 function VitalBar({ which, current, max, onDelta, disabled }) {
   const meta = VITAL_META[which];
   const pct = max > 0 ? Math.max(0, Math.min(100, (current / max) * 100)) : 0;
+  const [manual, setManual] = useState("");
+
+  const applyManual = () => {
+    const val = parseInt(manual);
+    if (!Number.isFinite(val) || val === 0) return;
+    onDelta(val);
+    setManual("");
+  };
+
   return (
     <div data-testid={`vital-${which}`} className="space-y-1.5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-sky-200">
           <span style={{ color: meta.color }} className="font-bold">{meta.label}</span>
           <span className="text-sky-400/60" data-testid={`vital-${which}-values`}>{current} / {max}</span>
@@ -282,6 +291,25 @@ function VitalBar({ which, current, max, onDelta, disabled }) {
               {d > 0 ? `+${d}` : d}
             </button>
           ))}
+          <div className="flex items-center gap-1 ml-1 pl-2 border-l border-sky-400/20">
+            <input
+              type="number"
+              value={manual}
+              onChange={(e) => setManual(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") applyManual(); }}
+              placeholder="±"
+              data-testid={`vital-${which}-manual`}
+              className="w-16 h-7 px-2 bg-sky-950/60 border border-sky-400/25 rounded-md text-sky-100 font-mono text-[11px] text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            />
+            <button
+              onClick={applyManual}
+              disabled={disabled || !manual}
+              data-testid={`vital-${which}-apply`}
+              className="h-7 px-2.5 rounded-md bg-sky-500 hover:bg-sky-400 text-sky-950 font-mono font-bold text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40"
+            >
+              Apply
+            </button>
+          </div>
         </div>
       </div>
       <div className={`relative h-3 rounded-full bg-sky-950/70 overflow-hidden ring-1 ${meta.ring}`}>
