@@ -2,13 +2,12 @@ import { useEffect, useState } from "react";
 import { api, API } from "@/lib/api";
 import { toast } from "sonner";
 import RankBadge from "@/components/RankBadge";
-import { Package, Zap, Star, Sparkles, Coins, Play } from "lucide-react";
+import { Package, Zap, Sparkles, Coins, Play } from "lucide-react";
 
 const CATEGORY_ICON = {
   Items: Package,
   Skills: Zap,
   Story: Sparkles,
-  "Star Relics": Star,
 };
 
 export default function InventoryPage() {

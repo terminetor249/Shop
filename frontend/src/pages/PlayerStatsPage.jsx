@@ -259,13 +259,14 @@ export default function PlayerStatsPage() {
 function VitalBar({ which, current, max, onDelta, disabled }) {
   const meta = VITAL_META[which];
   const pct = max > 0 ? Math.max(0, Math.min(100, (current / max) * 100)) : 0;
-  const [manual, setManual] = useState("");
+  const [magnitude, setMagnitude] = useState("");
+  const [sign, setSign] = useState(1); // 1 or -1
 
   const applyManual = () => {
-    const val = parseInt(manual);
-    if (!Number.isFinite(val) || val === 0) return;
-    onDelta(val);
-    setManual("");
+    const mag = parseInt(magnitude);
+    if (!Number.isFinite(mag) || mag <= 0) return;
+    onDelta(sign * mag);
+    setMagnitude("");
   };
 
   return (
@@ -275,7 +276,7 @@ function VitalBar({ which, current, max, onDelta, disabled }) {
           <span style={{ color: meta.color }} className="font-bold">{meta.label}</span>
           <span className="text-sky-400/60" data-testid={`vital-${which}-values`}>{current} / {max}</span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap">
           {[-10, -1, +1, +10].map((d) => (
             <button
               key={d}
@@ -292,18 +293,48 @@ function VitalBar({ which, current, max, onDelta, disabled }) {
             </button>
           ))}
           <div className="flex items-center gap-1 ml-1 pl-2 border-l border-sky-400/20">
+            {/* Sign toggle — replaces the need for a "-" key on mobile */}
+            <div className="inline-flex rounded-md overflow-hidden ring-1 ring-sky-400/20" role="group">
+              <button
+                type="button"
+                onClick={() => setSign(1)}
+                data-testid={`vital-${which}-sign-plus`}
+                className={`h-7 w-7 font-mono font-bold text-[11px] transition-colors ${
+                  sign === 1 ? "bg-emerald-500 text-emerald-950" : "bg-sky-950/60 text-emerald-200 hover:bg-emerald-500/20"
+                }`}
+                aria-pressed={sign === 1}
+                aria-label="Positive"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                onClick={() => setSign(-1)}
+                data-testid={`vital-${which}-sign-minus`}
+                className={`h-7 w-7 font-mono font-bold text-[11px] transition-colors ${
+                  sign === -1 ? "bg-red-500 text-red-950" : "bg-sky-950/60 text-red-200 hover:bg-red-500/20"
+                }`}
+                aria-pressed={sign === -1}
+                aria-label="Negative"
+              >
+                −
+              </button>
+            </div>
             <input
               type="number"
-              value={manual}
-              onChange={(e) => setManual(e.target.value)}
+              inputMode="numeric"
+              pattern="[0-9]*"
+              min="0"
+              value={magnitude}
+              onChange={(e) => setMagnitude(e.target.value.replace(/[^0-9]/g, ""))}
               onKeyDown={(e) => { if (e.key === "Enter") applyManual(); }}
-              placeholder="±"
+              placeholder="amt"
               data-testid={`vital-${which}-manual`}
-              className="w-16 h-7 px-2 bg-sky-950/60 border border-sky-400/25 rounded-md text-sky-100 font-mono text-[11px] text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+              className="w-14 h-7 px-2 bg-sky-950/60 border border-sky-400/25 rounded-md text-sky-100 font-mono text-[11px] text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
             />
             <button
               onClick={applyManual}
-              disabled={disabled || !manual}
+              disabled={disabled || !magnitude}
               data-testid={`vital-${which}-apply`}
               className="h-7 px-2.5 rounded-md bg-sky-500 hover:bg-sky-400 text-sky-950 font-mono font-bold text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40"
             >

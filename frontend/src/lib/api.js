@@ -45,7 +45,7 @@ export const RANK_META = {
 };
 
 export const RANKS = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS", "Star Relic"];
-export const CATEGORIES = ["Items", "Skills", "Story", "Star Relics"];
+export const CATEGORIES = ["Items", "Skills", "Story"];
 
 export const STAT_KEYS = ["vigor", "strength", "agility", "status", "acuity"];
 export const STAT_META = {

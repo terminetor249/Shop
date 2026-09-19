@@ -131,7 +131,7 @@ def set_auth_cookie(response: Response, token: str):
 
 # ---------- Models ----------
 RANKS = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS", "Star Relic"]
-CATEGORIES = ["Items", "Skills", "Story", "Star Relics"]
+CATEGORIES = ["Items", "Skills", "Story"]
 STAT_KEYS = ("vigor", "strength", "agility", "status", "acuity")
 DEFAULT_STATS = {k: 10 for k in STAT_KEYS}
 STARTING_FREE_POINTS = 25
@@ -201,7 +201,7 @@ class LoginInput(BaseModel):
 class ItemCreate(BaseModel):
     name: str
     description: str = ""
-    category: Literal["Items", "Skills", "Story", "Star Relics"]
+    category: Literal["Items", "Skills", "Story"]
     rank: str
     price: int = Field(ge=0)
     stock: int = Field(default=-1)  # -1 = unlimited
@@ -216,6 +216,7 @@ class GrantCoins(BaseModel):
 class ConstellationBroadcast(BaseModel):
     constellation_name: str = ""
     many_constellations: bool = False
+    system_message: bool = False
     reason: str
     amount: int = 0
     player_ids: List[str] = []  # empty = all players
@@ -223,10 +224,16 @@ class ConstellationBroadcast(BaseModel):
 class ScenarioCreate(BaseModel):
     title: str
     description: str = ""
-    scenario_type: Literal["main", "sub", "bounty"]
+    scenario_type: Literal["main", "sub", "hidden", "bounty"]
     visible_to: List[str] = []  # empty list = all players
     reward: str = ""
     reward_coins: int = Field(default=0, ge=0)
+    scenario_number: Optional[int] = None  # for main scenarios: 1, 2, 3...
+    difficulty: str = ""
+    clear_conditions: List[str] = []
+    time_limit: str = ""
+    failure: str = ""
+    notes: str = ""
 
 class PurchaseInput(BaseModel):
     item_id: str
@@ -308,6 +315,15 @@ async def me(user: dict = Depends(get_current_user)):
 @api_router.get("/players")
 async def list_players(user: dict = Depends(get_current_user)):
     docs = await db.users.find({"role": "player"}, {"password_hash": 0, "_id": 0}).to_list(1000)
+    # Players cannot see other players' coins / stats — only their own record is fully detailed.
+    if user.get("role") == "player":
+        pruned = []
+        for d in docs:
+            if d.get("id") == user.get("id"):
+                pruned.append(d)
+            else:
+                pruned.append({"id": d["id"], "name": d.get("name", ""), "email": d.get("email", "")})
+        return pruned
     return docs
 
 
@@ -436,6 +452,23 @@ async def admin_player_detail(player_id: str, user: dict = Depends(require_admin
     }
 
 
+@api_router.delete("/players/{player_id}")
+async def admin_delete_player(player_id: str, user: dict = Depends(require_admin)):
+    p = await db.users.find_one({"id": player_id, "role": "player"})
+    if not p:
+        raise HTTPException(status_code=404, detail="Player not found")
+    await db.users.delete_one({"id": player_id})
+    await db.inventory.delete_many({"player_id": player_id})
+    await db.notifications.delete_many({"player_id": player_id})
+    await db.transactions.delete_many({"player_id": player_id})
+    # Remove them from scenario visible_to lists
+    await db.scenarios.update_many(
+        {"visible_to": player_id},
+        {"$pull": {"visible_to": player_id}},
+    )
+    return {"ok": True, "removed": p["name"]}
+
+
 @api_router.post("/players/{player_id}/stats/adjust")
 async def admin_adjust_stat(player_id: str, body: AdjustInput, user: dict = Depends(require_admin)):
     p = await db.users.find_one({"id": player_id, "role": "player"})
@@ -543,25 +576,86 @@ async def delete_item(item_id: str, user: dict = Depends(require_admin)):
 async def _create_notification(
     player_id: str,
     kind: str,
-    reason: str,
+    reason: str = "",
     amount: int = 0,
     constellation_name: str = "",
     many_constellations: bool = False,
+    system_message: bool = False,
+    sender_name: str = "",
     scenario_title: str = "",
+    scenario_type: str = "",
+    scenario_number: Optional[int] = None,
 ):
     doc = {
         "id": str(uuid.uuid4()),
         "player_id": player_id,
-        "kind": kind,  # "constellation" | "scenario_cleared"
+        "kind": kind,  # "constellation" | "scenario_cleared" | "scenario_arrival" | "coin_transfer"
         "reason": reason,
         "amount": amount,
         "constellation_name": constellation_name,
         "many_constellations": many_constellations,
+        "system_message": system_message,
+        "sender_name": sender_name,
         "scenario_title": scenario_title,
+        "scenario_type": scenario_type,
+        "scenario_number": scenario_number,
         "seen": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.notifications.insert_one(doc)
+
+
+class CoinTransferInput(BaseModel):
+    recipient_id: str
+    amount: int = Field(gt=0)
+    reason: str = ""
+
+
+@api_router.post("/coins/transfer")
+async def transfer_coins(body: CoinTransferInput, user: dict = Depends(get_current_user)):
+    if user["role"] != "player":
+        raise HTTPException(status_code=403, detail="Only players can send coins")
+    if body.recipient_id == user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot send coins to yourself")
+    recipient = await db.users.find_one({"id": body.recipient_id, "role": "player"})
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Recipient not found")
+    sender = await db.users.find_one({"id": user["id"]})
+    if int(sender.get("coins", 0)) < body.amount:
+        raise HTTPException(status_code=400, detail="Not enough coins")
+    reason = body.reason.strip() or "No reason given"
+    now = datetime.now(timezone.utc).isoformat()
+    await db.users.update_one({"id": user["id"]}, {"$inc": {"coins": -body.amount}})
+    await db.users.update_one({"id": body.recipient_id}, {"$inc": {"coins": body.amount}})
+    await db.transactions.insert_one({
+        "id": str(uuid.uuid4()),
+        "player_id": user["id"],
+        "player_name": user["name"],
+        "amount": -body.amount,
+        "reason": f"Sent to {recipient['name']}: {reason}",
+        "type": "transfer_out",
+        "counterparty_id": body.recipient_id,
+        "counterparty_name": recipient["name"],
+        "created_at": now,
+    })
+    await db.transactions.insert_one({
+        "id": str(uuid.uuid4()),
+        "player_id": body.recipient_id,
+        "player_name": recipient["name"],
+        "amount": body.amount,
+        "reason": f"Received from {user['name']}: {reason}",
+        "type": "transfer_in",
+        "counterparty_id": user["id"],
+        "counterparty_name": user["name"],
+        "created_at": now,
+    })
+    await _create_notification(
+        body.recipient_id, "coin_transfer",
+        reason=reason,
+        amount=body.amount,
+        sender_name=user["name"],
+    )
+    return {"ok": True, "sent": body.amount, "recipient": recipient["name"]}
 
 
 @api_router.post("/constellation/send")
@@ -569,8 +663,12 @@ async def constellation_send(body: ConstellationBroadcast, user: dict = Depends(
     reason = body.reason.strip()
     if not reason:
         raise HTTPException(status_code=400, detail="Reason/message is required")
-    if not body.many_constellations and not body.constellation_name.strip():
-        raise HTTPException(status_code=400, detail="Constellation name is required (or tick 'Many constellations')")
+    # Determine broadcast mode (mutually exclusive)
+    modes = [bool(body.system_message), bool(body.many_constellations), bool(body.constellation_name.strip())]
+    if sum(modes) == 0:
+        raise HTTPException(status_code=400, detail="Choose a mode: system message, many constellations, or a specific constellation name")
+    if sum(modes) > 1:
+        raise HTTPException(status_code=400, detail="Only one mode at a time: system, many, or a specific constellation")
 
     # Resolve target players
     if body.player_ids:
@@ -584,8 +682,12 @@ async def constellation_send(body: ConstellationBroadcast, user: dict = Depends(
     if not players:
         raise HTTPException(status_code=404, detail="No matching players")
 
-    tx_type = "constellation"
-    constellation_display = "Many constellations" if body.many_constellations else f"The constellation {body.constellation_name.strip()}"
+    if body.system_message:
+        source_display = "System"
+    elif body.many_constellations:
+        source_display = "Many constellations"
+    else:
+        source_display = f"The constellation {body.constellation_name.strip()}"
 
     for p in players:
         if body.amount != 0:
@@ -595,8 +697,8 @@ async def constellation_send(body: ConstellationBroadcast, user: dict = Depends(
                 "player_id": p["id"],
                 "player_name": p["name"],
                 "amount": body.amount,
-                "reason": f"{constellation_display}: {reason}",
-                "type": tx_type,
+                "reason": f"{source_display}: {reason}",
+                "type": "system" if body.system_message else "constellation",
                 "admin_id": user["id"],
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
@@ -607,6 +709,7 @@ async def constellation_send(body: ConstellationBroadcast, user: dict = Depends(
             amount=body.amount,
             constellation_name=body.constellation_name.strip(),
             many_constellations=body.many_constellations,
+            system_message=body.system_message,
         )
     return {"ok": True, "delivered_to": len(players)}
 
@@ -748,6 +851,22 @@ async def create_scenario(body: ScenarioCreate, user: dict = Depends(require_adm
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.scenarios.insert_one(scenario)
+    # Fan-out arrival notifications
+    visible_to = scenario.get("visible_to") or []
+    if visible_to:
+        players = await db.users.find(
+            {"role": "player", "id": {"$in": visible_to}},
+            {"password_hash": 0, "_id": 0},
+        ).to_list(1000)
+    else:
+        players = await db.users.find({"role": "player"}, {"password_hash": 0, "_id": 0}).to_list(1000)
+    for p in players:
+        await _create_notification(
+            p["id"], "scenario_arrival",
+            scenario_title=scenario["title"],
+            scenario_type=scenario["scenario_type"],
+            scenario_number=scenario.get("scenario_number"),
+        )
     scenario.pop("_id", None)
     return scenario
 
@@ -899,6 +1018,10 @@ async def startup_event():
         r = await db.items.update_many({"category": "Modifiers"}, {"$set": {"category": "Story"}})
         if r.modified_count:
             logger.info(f"Migrated {r.modified_count} items: Modifiers -> Story")
+        # Category "Star Relics" is removed; migrate any leftovers to "Items"
+        r2 = await db.items.update_many({"category": "Star Relics"}, {"$set": {"category": "Items"}})
+        if r2.modified_count:
+            logger.info(f"Migrated {r2.modified_count} items: Star Relics category -> Items")
         # Backfill stats for players missing new fields (safe: preserves progression)
         async for u in db.users.find({"role": "player"}):
             existing_stats = u.get("stats") or {}

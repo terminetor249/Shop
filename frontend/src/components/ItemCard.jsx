@@ -6,7 +6,6 @@ const CATEGORY_ICON = {
   Items: Package,
   Skills: Zap,
   Story: Sparkles,
-  "Star Relics": Star,
 };
 
 export default function ItemCard({ item, onBuy, canBuy = false, actions = null }) {

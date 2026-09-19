@@ -9,6 +9,7 @@ import InventoryPage from "@/pages/InventoryPage";
 import ScenariosPage from "@/pages/ScenariosPage";
 import TransactionLogPage from "@/pages/TransactionLogPage";
 import PlayerStatsPage from "@/pages/PlayerStatsPage";
+import SendCoinsPage from "@/pages/SendCoinsPage";
 import AdminItemsPage from "@/pages/AdminItemsPage";
 import AdminPlayersPage from "@/pages/AdminPlayersPage";
 import AdminPlayerDetailPage from "@/pages/AdminPlayerDetailPage";
@@ -49,6 +50,7 @@ function AppRoutes() {
       <Route path="/stats" element={<ProtectedRoute><PlayerStatsPage /></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><InventoryPage /></ProtectedRoute>} />
       <Route path="/scenarios" element={<ProtectedRoute><ScenariosPage /></ProtectedRoute>} />
+      <Route path="/send" element={<ProtectedRoute><SendCoinsPage /></ProtectedRoute>} />
       <Route path="/log" element={<ProtectedRoute><TransactionLogPage /></ProtectedRoute>} />
       <Route path="/admin/items" element={<ProtectedRoute adminOnly><AdminItemsPage /></ProtectedRoute>} />
       <Route path="/admin/party" element={<ProtectedRoute adminOnly><AdminPartyOverviewPage /></ProtectedRoute>} />

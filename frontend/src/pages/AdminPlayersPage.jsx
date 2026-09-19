@@ -6,8 +6,8 @@ import { Coins, Send, Sparkles, Users, Star, ChevronRight } from "lucide-react";
 
 export default function AdminPlayersPage() {
   const [players, setPlayers] = useState([]);
+  const [mode, setMode] = useState("named"); // "named" | "many" | "system"
   const [constellationName, setConstellationName] = useState("");
-  const [manyConstellations, setManyConstellations] = useState(false);
   const [reason, setReason] = useState("");
   const [amount, setAmount] = useState(0);
   const [recipients, setRecipients] = useState([]); // empty = all
@@ -26,19 +26,24 @@ export default function AdminPlayersPage() {
   const onSend = async (e) => {
     e.preventDefault();
     if (!reason.trim()) return toast.error("Message / reason is required");
-    if (!manyConstellations && !constellationName.trim()) {
-      return toast.error("Enter a constellation name, or tick 'Many constellations'");
+    if (mode === "named" && !constellationName.trim()) {
+      return toast.error("Enter a constellation name, or switch mode to 'Many' or 'System'");
     }
     setSending(true);
     try {
       const { data } = await api.post("/constellation/send", {
-        constellation_name: constellationName.trim(),
-        many_constellations: manyConstellations,
+        constellation_name: mode === "named" ? constellationName.trim() : "",
+        many_constellations: mode === "many",
+        system_message: mode === "system",
         reason: reason.trim(),
         amount: parseInt(amount) || 0,
         player_ids: recipients,
       });
-      const label = manyConstellations ? "Many constellations" : `The constellation ${constellationName}`;
+      const label = mode === "system"
+        ? "System"
+        : mode === "many"
+          ? "Many constellations"
+          : `The constellation ${constellationName}`;
       toast.success(`${label} — transmitted to ${data.delivered_to} player(s)`);
       setReason("");
       setAmount(0);
@@ -52,6 +57,12 @@ export default function AdminPlayersPage() {
   const recipientLabel = recipients.length === 0
     ? "ALL PLAYERS"
     : `${recipients.length} selected`;
+
+  const previewLabel = mode === "system"
+    ? "System"
+    : mode === "many"
+      ? "Many constellations"
+      : `The constellation ${constellationName || "..."}`;
 
   return (
     <div className="space-y-8 animate-boot">
@@ -73,27 +84,45 @@ export default function AdminPlayersPage() {
           </h2>
 
           <div>
-            <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-mono text-sky-200">
-              <input
-                type="checkbox"
-                checked={manyConstellations}
-                onChange={(e) => setManyConstellations(e.target.checked)}
-                data-testid="broadcast-many"
-                className="accent-sky-400 w-4 h-4"
-              />
-              <span className="uppercase tracking-widest text-[10px]">Many constellations (anonymous chorus)</span>
-            </label>
+            <label className="block text-[9px] uppercase tracking-widest text-sky-400 mb-2 font-mono">Broadcast Mode</label>
+            <div className="inline-flex rounded-lg overflow-hidden ring-1 ring-sky-400/20 font-mono text-[10px] uppercase tracking-widest" role="group">
+              {[
+                { key: "named", label: "Named" },
+                { key: "many", label: "Many" },
+                { key: "system", label: "System" },
+              ].map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => setMode(m.key)}
+                  data-testid={`broadcast-mode-${m.key}`}
+                  aria-pressed={mode === m.key}
+                  className={`px-4 py-2 transition-colors ${
+                    mode === m.key
+                      ? "bg-sky-500 text-sky-950 font-bold"
+                      : "bg-sky-950/50 text-sky-300 hover:bg-sky-500/20"
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] font-mono text-sky-400/60 mt-2">
+              {mode === "named" && "→ From a specific constellation you name."}
+              {mode === "many" && "→ Anonymous chorus of constellations."}
+              {mode === "system" && "→ Impersonal system announcement — great for kill logs, world events."}
+            </p>
           </div>
 
           <div>
             <label className="block text-[9px] uppercase tracking-widest text-sky-400 mb-2 font-mono">
-              Constellation Name {manyConstellations && "(disabled — using chorus)"}
+              Constellation Name {mode !== "named" && `(disabled — using ${mode})`}
             </label>
             <input
               type="text"
               placeholder="Uriel, Secretive Plotter, Demon-like Judge of Fire..."
               value={constellationName}
-              disabled={manyConstellations}
+              disabled={mode !== "named"}
               onChange={(e) => setConstellationName(e.target.value)}
               data-testid="broadcast-name"
               className="w-full px-3 py-2 bg-sky-950/50 border border-sky-400/20 rounded-lg text-sky-100 font-mono text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-50"
@@ -108,11 +137,15 @@ export default function AdminPlayersPage() {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               data-testid="broadcast-reason"
-              placeholder="is pleased with your courage against the Serpent King..."
+              placeholder={mode === "system"
+                ? "The player has slain a Level-3 Wraith..."
+                : "is pleased with your courage against the Serpent King..."}
               className="w-full px-3 py-2 bg-sky-950/50 border border-sky-400/20 rounded-lg text-sky-100 font-mono text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
             />
             <p className="text-[10px] font-mono text-sky-400/60 mt-1">
-              &gt; Preview: {manyConstellations ? "Many constellations" : `The constellation ${constellationName || "..."}`} {reason || "..."}
+              &gt; Preview: [{mode === "system"
+                ? (reason || "...")
+                : `${previewLabel} ${reason || "..."}`}]
             </p>
           </div>
 

@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-
-const TYPE_META = {
-  main: { color: "bg-red-500", label: "Main Scenario", accent: "border-red-400/60" },
-  sub: { color: "bg-cyan-500", label: "Sub Scenario", accent: "border-cyan-400/60" },
-  bounty: { color: "bg-yellow-500", label: "Bounty", accent: "border-yellow-400/60" },
-};
+import { SCENARIO_TYPE_META } from "@/lib/scenario";
+import { ScenarioBlock } from "@/pages/AdminScenariosPage";
 
 export default function ScenariosPage() {
   const [scenarios, setScenarios] = useState([]);
@@ -21,9 +17,10 @@ export default function ScenariosPage() {
     })();
   }, []);
 
-  const main = scenarios.filter((s) => s.scenario_type === "main");
-  const sub = scenarios.filter((s) => s.scenario_type === "sub");
-  const bounty = scenarios.filter((s) => s.scenario_type === "bounty");
+  const groups = ["main", "sub", "hidden", "bounty"].map((t) => ({
+    type: t,
+    scenarios: scenarios.filter((s) => s.scenario_type === t),
+  }));
 
   return (
     <div className="space-y-8 animate-boot">
@@ -51,62 +48,29 @@ export default function ScenariosPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-8">
-          {main.length > 0 && (
-            <ScenarioSection title="Main Scenarios" scenarios={main} large />
+        <div className="space-y-10">
+          {groups.map(({ type, scenarios }) =>
+            scenarios.length === 0 ? null : (
+              <section key={type} className="space-y-3">
+                <div className="font-mono text-[10px] uppercase tracking-widest text-sky-400">
+                  [ {SCENARIO_TYPE_META[type].label}s ]
+                </div>
+                <div className="grid gap-4">
+                  {scenarios.map((s) => (
+                    <ScenarioBlock
+                      key={s.id}
+                      scenario={s}
+                      meta={SCENARIO_TYPE_META[s.scenario_type]}
+                      cleared={!!s.cleared_at}
+                      dataTestId={`scenario-${s.id}`}
+                    />
+                  ))}
+                </div>
+              </section>
+            )
           )}
-          <div className="grid md:grid-cols-2 gap-6">
-            {sub.length > 0 && <ScenarioSection title="Sub Scenarios" scenarios={sub} />}
-            {bounty.length > 0 && <ScenarioSection title="Bounties" scenarios={bounty} />}
-          </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function ScenarioSection({ title, scenarios, large = false }) {
-  return (
-    <div className="space-y-3">
-      <div className="font-mono text-[10px] uppercase tracking-widest text-sky-400">
-        [ {title} ]
-      </div>
-      <div className={`grid gap-4 ${large ? "" : "grid-cols-1"}`}>
-        {scenarios.map((s) => {
-          const meta = TYPE_META[s.scenario_type];
-          return (
-            <div
-              key={s.id}
-              data-testid={`scenario-${s.id}`}
-              className={`glass-panel rounded-2xl border-l-4 ${meta.accent} ${large ? "p-8" : "p-5"} ${s.cleared_at ? "opacity-70" : ""}`}
-            >
-              <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <span className={`${meta.color} text-sky-950 font-display font-bold text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full`}>
-                  {meta.label}
-                </span>
-                {s.cleared_at && (
-                  <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-mono font-bold text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full">
-                    ✓ Cleared
-                  </span>
-                )}
-              </div>
-              <h3 className={`font-display font-black text-sky-100 tracking-tight ${large ? "text-3xl" : "text-lg"}`}>
-                {s.title}
-              </h3>
-              {s.description && (
-                <p className={`text-sky-300/80 font-mono mt-2 leading-relaxed ${large ? "text-sm" : "text-xs"}`}>
-                  {s.description}
-                </p>
-              )}
-              {(s.reward || s.reward_coins > 0) && (
-                <div className={`mt-4 pt-3 border-t border-sky-400/10 font-mono text-yellow-300/90 ${large ? "text-sm" : "text-xs"}`}>
-                  &gt; Reward: {s.reward}{s.reward_coins > 0 ? ` (+${s.reward_coins} coins)` : ""}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }

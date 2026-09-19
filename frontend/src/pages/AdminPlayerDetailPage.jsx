@@ -1,16 +1,19 @@
 import { useEffect, useState, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { api, API, STAT_KEYS, STAT_META } from "@/lib/api";
 import { toast } from "sonner";
 import RankBadge from "@/components/RankBadge";
-import { ArrowLeft, Coins, Heart, Sword, Wind, Crown, Eye, Plus, Minus, Lock, Save, X, Sparkles } from "lucide-react";
+import { ArrowLeft, Coins, Heart, Sword, Wind, Crown, Eye, Plus, Minus, Lock, Save, X, Sparkles, Trash2, AlertTriangle } from "lucide-react";
 
 const STAT_ICON = { vigor: Heart, strength: Sword, agility: Wind, status: Crown, acuity: Eye };
 
 export default function AdminPlayerDetailPage() {
   const { id } = useParams();
+  const nav = useNavigate();
   const [data, setData] = useState(null);
   const [capDraft, setCapDraft] = useState({}); // {stat: {max, note}}
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const token = localStorage.getItem("dokkaebi_token") || "";
 
   const load = useCallback(async () => {
@@ -65,16 +68,36 @@ export default function AdminPlayerDetailPage() {
     }
   };
 
+  const onDeletePlayer = async () => {
+    setDeleting(true);
+    try {
+      const { data: res } = await api.delete(`/players/${id}`);
+      toast.success(`Player "${res.removed}" removed from the story`);
+      nav("/admin/players");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Delete failed");
+      setDeleting(false);
+    }
+  };
+
   if (!data) return <div className="py-16 text-center font-mono text-sky-400/60 animate-pulse">[ FETCHING PLAYER RECORD... ]</div>;
 
   const { player, stats, stat_caps, total, inventory, vitals, unallocated_points } = data;
 
   return (
     <div className="space-y-8 animate-boot">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 justify-between">
         <Link to="/admin/players" data-testid="back-to-players" className="text-sky-400 hover:text-sky-100 flex items-center gap-1 font-mono text-xs uppercase tracking-widest">
           <ArrowLeft size={14} /> Back
         </Link>
+        <button
+          type="button"
+          onClick={() => setConfirmDelete(true)}
+          data-testid="delete-player-btn"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-400/40 text-red-200 font-mono text-[10px] uppercase tracking-widest transition-colors"
+        >
+          <Trash2 size={12} /> Remove Player
+        </button>
       </div>
 
       <div className="glass-panel rounded-2xl p-6 flex flex-col md:flex-row md:items-center gap-6">
@@ -241,6 +264,59 @@ export default function AdminPlayerDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Delete confirmation modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center px-4" data-testid="delete-confirm-modal">
+          <div className="absolute inset-0 bg-[#050A15]/85 backdrop-blur-md notif-backdrop-in" onClick={() => !deleting && setConfirmDelete(false)} />
+          <div className="relative glass-panel rounded-2xl p-8 max-w-md w-full ring-2 ring-red-400/70 shadow-[0_0_80px_10px_rgba(239,68,68,0.35)] notif-panel-in">
+            <span className="absolute top-2 left-2 w-3 h-3 border-t-2 border-l-2 border-red-300/70" />
+            <span className="absolute top-2 right-2 w-3 h-3 border-t-2 border-r-2 border-red-300/70" />
+            <span className="absolute bottom-2 left-2 w-3 h-3 border-b-2 border-l-2 border-red-300/70" />
+            <span className="absolute bottom-2 right-2 w-3 h-3 border-b-2 border-r-2 border-red-300/70" />
+
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 rounded-full bg-red-500/20 text-red-200 border border-red-400/60 flex items-center justify-center">
+                <AlertTriangle size={30} />
+              </div>
+            </div>
+
+            <div className="text-center mb-2">
+              <span className="inline-block px-3 py-1 rounded-full text-[10px] font-mono uppercase tracking-[0.3em] bg-red-500/20 text-red-200 border border-red-400/60">
+                [ REMOVAL WARNING ]
+              </span>
+            </div>
+
+            <h2 className="font-display font-black text-2xl sm:text-3xl text-sky-50 text-center tracking-tight leading-tight mt-3">
+              Are you sure?
+            </h2>
+            <p className="font-mono text-sm text-sky-200 text-center mt-3">
+              This will permanently erase <span className="text-red-200 font-bold">{player.name}</span> from the story — their account, inventory, transactions, and notifications will all be lost.
+            </p>
+
+            <div className="flex gap-3 mt-8">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                disabled={deleting}
+                data-testid="delete-cancel"
+                className="flex-1 py-3 rounded-lg bg-sky-950/60 hover:bg-sky-500/20 border border-sky-400/25 text-sky-100 font-display font-bold uppercase text-xs tracking-widest transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={onDeletePlayer}
+                disabled={deleting}
+                data-testid="delete-confirm"
+                className="flex-1 py-3 rounded-lg bg-red-500 hover:bg-red-400 text-red-950 font-display font-bold uppercase text-xs tracking-widest transition-colors disabled:opacity-50"
+              >
+                {deleting ? "Removing..." : "Yes, remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
